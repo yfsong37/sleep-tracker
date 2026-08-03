@@ -1,0 +1,1651 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sleep Tracker</title>
+<script src="https://accounts.google.com/gsi/client" async defer onload="window.__gisLoaded && window.__gisLoaded()"></script>
+<style>
+/* ── tokens ──────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --series-bed: #2a78d6;    /* categorical slot 1 — blue */
+  --series-deep: #1baf7a;   /* categorical slot 3 — aqua */
+  --trend: #52514e;         /* de-emphasis (emphasis pattern) */
+  --good: #0ca30c;
+  --critical: #d03b3b;
+  --accent-wash: rgba(42,120,214,0.10);
+  --hover-wash: rgba(11,11,11,0.04);
+  --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 4px 12px rgba(11,11,11,0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-bed: #3987e5;
+    --series-deep: #199e70;
+    --trend: #c3c2b7;
+    --good: #0ca30c;
+    --critical: #d03b3b;
+    --accent-wash: rgba(57,135,229,0.14);
+    --hover-wash: rgba(255,255,255,0.06);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255,255,255,0.10);
+  --series-bed: #3987e5;
+  --series-deep: #199e70;
+  --trend: #c3c2b7;
+  --good: #0ca30c;
+  --critical: #d03b3b;
+  --accent-wash: rgba(57,135,229,0.14);
+  --hover-wash: rgba(255,255,255,0.06);
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--page);
+  color: var(--text-primary);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+
+/* ── header ──────────────────────────────────────────────────────────────── */
+header.top { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+header.top h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+header.top .spacer { flex: 1; }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.card + .card { margin-top: 20px; }
+.card h2 {
+  font-size: 15px; font-weight: 600; margin: 0 0 2px;
+  letter-spacing: -0.005em;
+}
+.card .sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 16px; }
+
+/* ── buttons & inputs ────────────────────────────────────────────────────── */
+button {
+  font: inherit; color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 13px; cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+button:hover { background: var(--hover-wash); }
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--series-bed); outline-offset: 2px;
+}
+button.primary {
+  background: var(--series-bed); color: #fff; border-color: transparent; font-weight: 500;
+}
+button.primary:hover { filter: brightness(1.08); }
+button.subtle { border-color: transparent; color: var(--text-secondary); }
+button[aria-pressed="true"] {
+  background: var(--accent-wash); border-color: var(--series-bed); color: var(--text-primary);
+}
+button.danger { color: var(--critical); }
+
+input[type="time"], input[type="number"], input[type="date"], select {
+  font: inherit; color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 9px;
+}
+label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text-secondary); }
+label.inline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+
+/* ── log zone ────────────────────────────────────────────────────────────── */
+.logzone { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.logzone > .col { flex: 1 1 260px; min-width: 0; }
+.bigbtn {
+  width: 100%; padding: 20px 16px; font-size: 17px; font-weight: 600;
+  border-radius: 12px; line-height: 1.3;
+}
+.bigbtn .hint { display: block; font-size: 13px; font-weight: 400; opacity: 0.85; margin-top: 3px; }
+.status { font-size: 13px; color: var(--text-secondary); margin-top: 10px; min-height: 20px; }
+.status.ok { color: var(--good); }
+.status.err { color: var(--critical); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+
+/* ── stat tiles ──────────────────────────────────────────────────────────── */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 20px 0; }
+.tile {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
+}
+.tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.tile .value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+.tile .delta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.tile .delta .up { color: var(--good); }
+.tile .delta .down { color: var(--critical); }
+
+/* ── filter row ──────────────────────────────────────────────────────────── */
+.filters {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  margin: 24px 0 16px;
+}
+.filters .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--border); }
+
+/* ── chart ───────────────────────────────────────────────────────────────── */
+.chartbox { position: relative; width: 100%; }
+.chartbox svg { display: block; width: 100%; height: auto; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; color: var(--text-secondary); }
+.legend .item { display: inline-flex; align-items: center; gap: 6px; }
+.legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.legend .linekey { width: 14px; height: 2px; border-radius: 1px; flex: none; }
+.legend .dashkey {
+  width: 14px; height: 0; flex: none;
+  border-top: 2px dashed var(--text-muted);
+}
+.empty {
+  padding: 40px 16px; text-align: center; color: var(--text-secondary); font-size: 14px;
+}
+
+.tooltip {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px;
+  box-shadow: var(--shadow); white-space: nowrap;
+  opacity: 0; transition: opacity 100ms ease;
+}
+.tooltip.on { opacity: 1; }
+.tooltip .tt-date { color: var(--text-secondary); margin-bottom: 4px; }
+.tooltip .tt-row { display: flex; align-items: center; gap: 6px; }
+.tooltip .tt-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── table ───────────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--text-secondary); font-weight: 500; font-size: 12px; }
+td.num { font-variant-numeric: tabular-nums; }
+tbody tr:hover { background: var(--hover-wash); }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.pill.met { color: var(--good); }
+.pill.miss { color: var(--critical); }
+td .mini { padding: 3px 7px; font-size: 12px; }
+td input { padding: 3px 6px; font-size: 13px; width: 88px; }
+
+/* ── misc ────────────────────────────────────────────────────────────────── */
+.hidden { display: none !important; }
+.filedrop {
+  border: 1px dashed var(--axis); border-radius: 10px; padding: 16px;
+  text-align: center; font-size: 13px; color: var(--text-secondary);
+}
+.filedrop.over { border-color: var(--series-bed); background: var(--accent-wash); }
+.progress { height: 4px; background: var(--grid); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--series-bed); transition: width 120ms linear; }
+.note { font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+@media (max-width: 560px) {
+  .wrap { padding: 16px 14px 48px; }
+  .tile .value { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Sleep Tracker</h1>
+  <div class="spacer"></div>
+  <button id="themeBtn" class="subtle" title="Toggle light / dark">Theme</button>
+</header>
+
+<!-- ── logging ─────────────────────────────────────────────────────────── -->
+<section class="card">
+  <div class="logzone">
+    <div class="col">
+      <h2>Bedtime</h2>
+      <p class="sub">One click stamps the current time as tonight's bedtime.</p>
+      <button id="logBtn" class="primary bigbtn">
+        Log bedtime now
+        <span class="hint" id="logHint">—</span>
+      </button>
+      <div class="row" style="margin-top:10px">
+        <label class="field">
+          <span>Or set manually</span>
+          <div class="row">
+            <input type="date" id="bedDate">
+            <input type="time" id="bedTime">
+            <button id="bedSave">Save</button>
+          </div>
+        </label>
+      </div>
+      <div class="status" id="bedStatus" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="col">
+      <h2>Deep sleep</h2>
+      <p class="sub">Import from Apple Watch, or type it in.</p>
+      <div class="row">
+        <label class="field">
+          <span>Night of</span>
+          <input type="date" id="deepDate">
+        </label>
+        <label class="field">
+          <span>Deep sleep (minutes)</span>
+          <input type="number" id="deepMins" min="0" max="600" step="1" style="width:120px">
+        </label>
+        <button id="deepSave">Save</button>
+      </div>
+      <div class="status" id="deepStatus" role="status" aria-live="polite"></div>
+
+      <div class="filedrop" id="drop" style="margin-top:14px">
+        <strong>Import Apple Watch data</strong><br>
+        Drop your Health <code>export.xml</code> or a CSV here, or
+        <button id="pickBtn" class="mini" style="padding:3px 9px;font-size:12px">choose a file</button>
+        <input type="file" id="file" accept=".xml,.csv,.txt" class="hidden">
+      </div>
+      <label class="inline" style="margin-top:10px">
+        <input type="checkbox" id="fillBed" checked>
+        Also backfill missing bedtimes from the import
+      </label>
+      <div class="progress hidden" id="prog"><i></i></div>
+      <div class="status" id="impStatus" role="status" aria-live="polite"></div>
+      <p class="note">
+        Health app → profile → <em>Export All Health Data</em> → unzip → pick
+        <code>apple_health_export/export.xml</code>. Parsed on your device; nothing is uploaded.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── goals ───────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>Goals</h2>
+  <p class="sub">Both appear as reference lines on the charts below.</p>
+  <div class="row">
+    <label class="field">
+      <span>Target bedtime</span>
+      <input type="time" id="targetBed">
+    </label>
+    <label class="field">
+      <span>Minimum deep sleep (minutes)</span>
+      <input type="number" id="targetDeep" min="0" max="600" step="5" style="width:130px">
+    </label>
+    <span class="note" id="targetDeepHint" style="margin:0 0 8px 4px"></span>
+  </div>
+</section>
+
+<!-- ── stats ───────────────────────────────────────────────────────────── -->
+<div class="kpis" id="kpis"></div>
+
+<!-- ── filters ─────────────────────────────────────────────────────────── -->
+<div class="filters">
+  <div class="seg" id="rangeSeg" role="group" aria-label="Time range">
+    <button data-days="7">7 nights</button>
+    <button data-days="14">14</button>
+    <button data-days="30">30</button>
+    <button data-days="90">90</button>
+    <button data-days="0">All</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" role="group" aria-label="View">
+    <button id="viewChart" aria-pressed="true">Charts</button>
+    <button id="viewTable" aria-pressed="false">Table</button>
+  </div>
+</div>
+
+<!-- ── charts ──────────────────────────────────────────────────────────── -->
+<div id="chartsView">
+  <section class="card">
+    <h2>Bedtime</h2>
+    <p class="sub" id="bedSubtitle">When you went to bed each night — higher is later.</p>
+    <div class="legend" id="bedLegend"></div>
+    <div class="chartbox" id="bedChart"></div>
+  </section>
+
+  <section class="card">
+    <h2>Deep sleep</h2>
+    <p class="sub">Minutes of deep sleep per night.</p>
+    <div class="legend" id="deepLegend"></div>
+    <div class="chartbox" id="deepChart"></div>
+  </section>
+</div>
+
+<!-- ── table ───────────────────────────────────────────────────────────── -->
+<section class="card hidden" id="tableView">
+  <h2>All nights</h2>
+  <p class="sub">The same data as the charts. Edit or delete any night.</p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Night of</th>
+          <th>Bedtime</th>
+          <th>vs target</th>
+          <th>Deep sleep</th>
+          <th>vs minimum</th>
+          <th>Source</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── data ────────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>Your data</h2>
+  <p class="sub">Stored in this browser. Export a backup, or move it to another device.</p>
+  <div class="row">
+    <button id="exportBtn">Export JSON</button>
+    <button id="importBtn">Import JSON</button>
+    <input type="file" id="jsonFile" accept=".json" class="hidden">
+    <div class="spacer" style="flex:1"></div>
+    <button id="wipeBtn" class="danger">Delete all data</button>
+  </div>
+  <div class="status" id="dataStatus" role="status" aria-live="polite"></div>
+  <p class="note">
+    Backups drop into your Downloads folder — put that file in Google Drive (or any
+    cloud folder) and re-import it anywhere to pick up where you left off.
+  </p>
+
+  <div class="row" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+    <button id="driveConnectBtn">Connect Google Drive</button>
+    <button id="driveSyncBtn" class="hidden">Sync now</button>
+    <button id="driveDisconnectBtn" class="hidden subtle">Disconnect</button>
+  </div>
+  <div class="status" id="driveStatus" role="status" aria-live="polite"></div>
+  <p class="note">
+    Once connected, every change here is also saved to a single file in your Drive
+    (My Drive → <code>sleep-tracker-data.json</code>), so opening this page on
+    another device picks up your history automatically. Requires a one-time setup
+    in Google Cloud Console — see the README.
+  </p>
+</section>
+
+</div>
+
+<script>
+"use strict";
+
+/* ══ constants ════════════════════════════════════════════════════════════ */
+const STORE_KEY = "sleep-tracker-v1";
+const THEME_KEY = "sleep-tracker-theme";
+const DAY_ANCHOR = 18 * 60;   // bedtime axis origin: 18:00
+const NIGHT_CUTOFF_HOUR = 12; // before noon → belongs to the previous night
+const TREND_WINDOW = 7;
+
+/* Paste your own OAuth Client ID here to enable Google Drive sync.
+   Get one from Google Cloud Console — full steps in README.md § "Google Drive sync". */
+const GOOGLE_CLIENT_ID = "";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_FILE_NAME = "sleep-tracker-data.json";
+const DRIVE_FILEID_KEY = "sleep-tracker-drive-file-id";
+
+/* ══ state ════════════════════════════════════════════════════════════════ */
+let state = load();
+let rangeDays = 30;
+let showTable = false;
+
+function blank() {
+  return { version: 1, settings: { targetBedtime: "22:30", minDeepMinutes: 90 }, nights: {} };
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return blank();
+    const d = JSON.parse(raw);
+    const base = blank();
+    return {
+      version: 1,
+      settings: Object.assign(base.settings, d.settings || {}),
+      nights: d.nights && typeof d.nights === "object" ? d.nights : {},
+    };
+  } catch (e) {
+    console.warn("Could not read saved data, starting fresh.", e);
+    return blank();
+  }
+}
+
+function save() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) {
+    setStatus("dataStatus", "Could not save — browser storage may be full or blocked.", "err");
+  }
+  queueDriveSync();
+}
+
+/* ══ time helpers ═════════════════════════════════════════════════════════ */
+const pad2 = (n) => String(n).padStart(2, "0");
+
+/** "YYYY-MM-DD" for a Date, in local time. */
+function ymd(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** Which night a wall-clock moment belongs to: pre-noon rolls back a day. */
+function nightOf(d) {
+  const x = new Date(d.getTime());
+  if (x.getHours() < NIGHT_CUTOFF_HOUR) x.setDate(x.getDate() - 1);
+  return ymd(x);
+}
+
+function nightOfParts(y, mo, da, hh) {
+  const d = new Date(y, mo - 1, da, hh, 0, 0, 0);
+  if (hh < NIGHT_CUTOFF_HOUR) d.setDate(d.getDate() - 1);
+  return ymd(d);
+}
+
+/** "HH:MM" → minutes since midnight. */
+function hmToMin(s) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || "").trim());
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  if (h > 23 || mi > 59) return null;
+  return h * 60 + mi;
+}
+
+const minToHm = (v) => `${pad2(Math.floor(v / 60) % 24)}:${pad2(v % 60)}`;
+
+/** Minutes-since-midnight → position on the 18:00-origin bedtime axis. */
+const toAxis = (min) => (min - DAY_ANCHOR + 1440) % 1440;
+/** Inverse of toAxis. */
+const fromAxis = (v) => (Math.round(v) + DAY_ANCHOR) % 1440;
+
+/** 12-hour clock label for an axis value. */
+function axisLabel(v) {
+  const m = fromAxis(v);
+  const h24 = Math.floor(m / 60), mi = m % 60;
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${pad2(mi)}${h24 < 12 ? "am" : "pm"}`;
+}
+
+function fmtDuration(mins) {
+  if (mins == null) return "—";
+  const t = Math.round(mins);
+  const h = Math.floor(t / 60), m = t % 60;
+  if (!h) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** "YYYY-MM-DD" → Date at local midnight (avoids UTC-parsing drift). */
+function parseYmd(s) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function fmtDate(s, withYear) {
+  const d = parseYmd(s);
+  const o = { month: "short", day: "numeric" };
+  if (withYear) o.year = "numeric";
+  return d.toLocaleDateString(undefined, o);
+}
+
+function addDays(s, n) {
+  const d = parseYmd(s);
+  d.setDate(d.getDate() + n);
+  return ymd(d);
+}
+
+/* ══ data shaping ═════════════════════════════════════════════════════════ */
+/** Every night in range, gaps included, oldest first. */
+function seriesForRange() {
+  const keys = Object.keys(state.nights).sort();
+  if (!keys.length) return [];
+
+  const today = nightOf(new Date());
+  const last = keys[keys.length - 1] > today ? keys[keys.length - 1] : today;
+  let first;
+  if (rangeDays > 0) {
+    first = addDays(last, -(rangeDays - 1));
+    if (first < keys[0]) first = keys[0];
+  } else {
+    first = keys[0];
+  }
+
+  const out = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) {
+    const n = state.nights[d] || {};
+    const bedMin = n.bedtime != null ? hmToMin(n.bedtime) : null;
+    out.push({
+      date: d,
+      bedMin,
+      bedAxis: bedMin == null ? null : toAxis(bedMin),
+      deep: typeof n.deepMinutes === "number" ? n.deepMinutes : null,
+      source: n.source || null,
+    });
+    if (out.length > 3660) break; // hard stop against a runaway range
+  }
+  return out;
+}
+
+/** Trailing mean over the last `win` non-null values. */
+function rollingMean(rows, key, win) {
+  const out = [];
+  const buf = [];
+  for (const r of rows) {
+    if (r[key] != null) {
+      buf.push(r[key]);
+      if (buf.length > win) buf.shift();
+    }
+    out.push(buf.length >= Math.min(win, 3)
+      ? buf.reduce((a, b) => a + b, 0) / buf.length
+      : null);
+  }
+  return out;
+}
+
+/* ══ generic chart plumbing ═══════════════════════════════════════════════ */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/* `var()` inside an SVG presentation attribute is not reliably supported, so
+   resolve custom properties to literal values before they hit the attribute.
+   TOK is cleared each render so a theme switch repaints. */
+let TOK = null;
+function tok(v) {
+  if (typeof v !== "string" || !v.startsWith("var(")) return v;
+  const name = v.slice(4, v.lastIndexOf(")")).trim();
+  if (!TOK) TOK = getComputedStyle(document.documentElement);
+  return TOK.getPropertyValue(name).trim() || v;
+}
+const el = (name, attrs) => {
+  const n = document.createElementNS(SVG_NS, name);
+  for (const k in attrs) if (attrs[k] != null) n.setAttribute(k, tok(attrs[k]));
+  return n;
+};
+
+/** Duration/clock ticks on 15/30/60/120-minute steps — never 50m or 1h 40m. */
+function timeTicks(lo, hi) {
+  const span = hi - lo;
+  const step = span <= 90 ? 15 : span <= 180 ? 30 : span <= 420 ? 60 : 120;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+
+/** X labels thinned to whatever fits; always keeps the last night. */
+function xLabelIndices(n, plotW) {
+  if (n === 0) return [];
+  const maxLabels = Math.max(2, Math.floor(plotW / 68));
+  const stride = Math.ceil(n / maxLabels);
+  const idx = [];
+  for (let i = n - 1; i >= 0; i -= stride) idx.push(i);
+  return idx.reverse();
+}
+
+/** Rounded-top bar path, square at the baseline. */
+function barPath(x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, w / 2, h));
+  return `M${x},${y + h}L${x},${y + rr}Q${x},${y} ${x + rr},${y}` +
+         `L${x + w - rr},${y}Q${x + w},${y} ${x + w},${y + rr}L${x + w},${y + h}Z`;
+}
+
+function tooltipFor(box) {
+  let tip = box.querySelector(".tooltip");
+  if (!tip) {
+    tip = document.createElement("div");
+    tip.className = "tooltip";
+    box.appendChild(tip);
+  }
+  return tip;
+}
+
+function placeTip(tip, box, x, y) {
+  const bw = box.clientWidth;
+  tip.style.left = "0px";
+  tip.style.top = "0px";
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = x - tw / 2;
+  left = Math.max(4, Math.min(left, bw - tw - 4));
+  let top = y - th - 12;
+  if (top < 4) top = y + 16;
+  tip.style.left = left + "px";
+  tip.style.top = top + "px";
+}
+
+function emptyState(box, msg) {
+  box.innerHTML = `<div class="empty">${msg}</div>`;
+}
+
+/* ══ bedtime chart ════════════════════════════════════════════════════════ */
+function renderBedtime() {
+  const box = document.getElementById("bedChart");
+  const legend = document.getElementById("bedLegend");
+  const rows = seriesForRange();
+  const pts = rows.filter((r) => r.bedAxis != null);
+
+  if (!pts.length) {
+    legend.innerHTML = "";
+    emptyState(box, "No bedtimes logged yet — press <strong>Log bedtime now</strong> tonight.");
+    return;
+  }
+
+  const targetMin = hmToMin(state.settings.targetBedtime);
+  const targetAxis = targetMin == null ? null : toAxis(targetMin);
+  const trend = rollingMean(rows, "bedAxis", TREND_WINDOW);
+  const showTrend = trend.some((v) => v != null);
+
+  legend.innerHTML =
+    `<span class="item"><span class="swatch" style="background:var(--series-bed)"></span>Nightly bedtime</span>` +
+    (showTrend ? `<span class="item"><span class="linekey" style="background:var(--trend)"></span>${TREND_WINDOW}-night average</span>` : "") +
+    (targetAxis != null ? `<span class="item"><span class="dashkey"></span>Target ${axisLabel(targetAxis)}</span>` : "");
+
+  const W = Math.max(320, box.clientWidth || 640);
+  const M = { t: 16, r: 58, b: 30, l: 56 };
+  const plotW = W - M.l - M.r;
+  const H = Math.round(Math.min(320, Math.max(200, plotW * 0.42)));
+  const plotH = H - M.t - M.b;
+
+  let lo = Math.min(...pts.map((p) => p.bedAxis));
+  let hi = Math.max(...pts.map((p) => p.bedAxis));
+  if (targetAxis != null) { lo = Math.min(lo, targetAxis); hi = Math.max(hi, targetAxis); }
+  const padMin = 20;
+  lo -= padMin; hi += padMin;
+  if (hi - lo < 120) { const c = (lo + hi) / 2; lo = c - 60; hi = c + 60; }
+
+  const n = rows.length;
+  const bandW = plotW / n;
+  const cx = (i) => M.l + bandW * (i + 0.5);
+  const cy = (v) => M.t + plotH * (1 - (v - lo) / (hi - lo));
+
+  box.innerHTML = "";
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img" });
+  svg.appendChild(el("title", {})).textContent =
+    `Bedtime over the last ${n} nights, against a ${state.settings.targetBedtime} target.`;
+
+  // gridlines + y axis (solid hairlines, recessive)
+  for (const t of timeTicks(lo, hi)) {
+    const y = cy(t);
+    svg.appendChild(el("line", { x1: M.l, y1: y, x2: M.l + plotW, y2: y, stroke: "var(--grid)", "stroke-width": 1 }));
+    const lab = el("text", { x: M.l - 10, y: y + 4, "text-anchor": "end",
+      fill: "var(--text-muted)", "font-size": 11, "font-variant-numeric": "tabular-nums" });
+    lab.textContent = axisLabel(t);
+    svg.appendChild(lab);
+  }
+  svg.appendChild(el("line", { x1: M.l, y1: M.t + plotH, x2: M.l + plotW, y2: M.t + plotH, stroke: "var(--axis)", "stroke-width": 1 }));
+
+  // target reference line — dashed on purpose: a threshold, not a gridline
+  if (targetAxis != null && targetAxis >= lo && targetAxis <= hi) {
+    const y = cy(targetAxis);
+    svg.appendChild(el("line", { x1: M.l, y1: y, x2: M.l + plotW, y2: y,
+      stroke: "var(--text-muted)", "stroke-width": 2, "stroke-dasharray": "5 4", "stroke-linecap": "round" }));
+    const lab = el("text", { x: M.l + plotW + 6, y: y + 4, fill: "var(--text-secondary)", "font-size": 11 });
+    lab.textContent = "Target";
+    svg.appendChild(lab);
+  }
+
+  // trend line (de-emphasis) beneath the accent series
+  if (showTrend) {
+    let d = "", pen = false;
+    trend.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += (pen ? "L" : "M") + cx(i) + "," + cy(v);
+      pen = true;
+    });
+    svg.appendChild(el("path", { d, fill: "none", stroke: "var(--trend)", "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.55 }));
+  }
+
+  // nightly line, broken across gaps
+  let d = "", pen = false;
+  rows.forEach((r, i) => {
+    if (r.bedAxis == null) { pen = false; return; }
+    d += (pen ? "L" : "M") + cx(i) + "," + cy(r.bedAxis);
+    pen = true;
+  });
+  svg.appendChild(el("path", { d, fill: "none", stroke: "var(--series-bed)", "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+  // dots with a 2px surface ring
+  rows.forEach((r, i) => {
+    if (r.bedAxis == null) return;
+    svg.appendChild(el("circle", { cx: cx(i), cy: cy(r.bedAxis), r: 4,
+      fill: "var(--series-bed)", stroke: "var(--surface-1)", "stroke-width": 2 }));
+  });
+
+  // x labels
+  for (const i of xLabelIndices(n, plotW)) {
+    const lab = el("text", { x: cx(i), y: H - 10, "text-anchor": "middle", fill: "var(--text-muted)", "font-size": 11 });
+    lab.textContent = fmtDate(rows[i].date);
+    svg.appendChild(lab);
+  }
+
+  // direct label on the most recent night (selective, not every point)
+  const lastI = rows.reduce((acc, r, i) => (r.bedAxis != null ? i : acc), -1);
+  if (lastI >= 0) {
+    const lab = el("text", { x: Math.min(cx(lastI) + 9, M.l + plotW + M.r - 6), y: cy(rows[lastI].bedAxis) - 9,
+      "text-anchor": "start", fill: "var(--text-primary)", "font-size": 11, "font-weight": 600 });
+    lab.textContent = axisLabel(rows[lastI].bedAxis);
+    svg.appendChild(lab);
+  }
+
+  // crosshair + hover layer
+  const cross = el("line", { y1: M.t, y2: M.t + plotH, stroke: "var(--axis)", "stroke-width": 1, opacity: 0 });
+  svg.appendChild(cross);
+  box.appendChild(svg);
+  const tip = tooltipFor(box);
+
+  const hit = el("rect", { x: M.l, y: M.t, width: plotW, height: plotH, fill: "transparent" });
+  svg.appendChild(hit);
+
+  function showAt(i) {
+    const r = rows[i];
+    if (!r || r.bedAxis == null) { hide(); return; }
+    cross.setAttribute("x1", cx(i)); cross.setAttribute("x2", cx(i)); cross.setAttribute("opacity", 1);
+    const late = targetAxis != null && r.bedAxis > targetAxis;
+    const diff = targetAxis == null ? null : Math.abs(Math.round(r.bedAxis - targetAxis));
+    tip.innerHTML =
+      `<div class="tt-date">${fmtDate(r.date, true)}</div>` +
+      `<div class="tt-row"><span class="swatch" style="width:8px;height:8px;border-radius:2px;background:var(--series-bed)"></span>` +
+      `<span class="tt-val">${axisLabel(r.bedAxis)}</span></div>` +
+      (diff == null ? "" : `<div class="tt-date" style="margin:4px 0 0">${diff === 0 ? "on target" : fmtDuration(diff) + (late ? " later" : " earlier") + " than target"}</div>`);
+    tip.classList.add("on");
+    placeTip(tip, box, cx(i), cy(r.bedAxis));
+  }
+  function hide() { cross.setAttribute("opacity", 0); tip.classList.remove("on"); }
+
+  const nearest = (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const scale = W / rect.width;
+    const px = (evt.clientX - rect.left) * scale;
+    return Math.max(0, Math.min(n - 1, Math.floor((px - M.l) / bandW)));
+  };
+  hit.addEventListener("pointermove", (e) => showAt(nearest(e)));
+  hit.addEventListener("pointerleave", hide);
+
+  // keyboard parity with hover
+  svg.setAttribute("tabindex", "0");
+  let focusI = lastI;
+  svg.addEventListener("focus", () => showAt(focusI));
+  svg.addEventListener("blur", hide);
+  svg.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    let j = focusI;
+    for (let s = 0; s < n; s++) {
+      j += e.key === "ArrowLeft" ? -1 : 1;
+      if (j < 0 || j >= n) return;
+      if (rows[j].bedAxis != null) { focusI = j; showAt(j); return; }
+    }
+  });
+}
+
+/* ══ deep sleep chart ═════════════════════════════════════════════════════ */
+function renderDeep() {
+  const box = document.getElementById("deepChart");
+  const legend = document.getElementById("deepLegend");
+  const rows = seriesForRange();
+  const pts = rows.filter((r) => r.deep != null);
+
+  if (!pts.length) {
+    legend.innerHTML = "";
+    emptyState(box, "No deep sleep recorded yet — import from Health or enter it above.");
+    return;
+  }
+
+  const minDeep = state.settings.minDeepMinutes;
+  const trend = rollingMean(rows, "deep", TREND_WINDOW);
+  const showTrend = trend.some((v) => v != null);
+
+  legend.innerHTML =
+    `<span class="item"><span class="swatch" style="background:var(--series-deep)"></span>Nightly deep sleep</span>` +
+    (showTrend ? `<span class="item"><span class="linekey" style="background:var(--trend)"></span>${TREND_WINDOW}-night average</span>` : "") +
+    (minDeep > 0 ? `<span class="item"><span class="dashkey"></span>Minimum ${fmtDuration(minDeep)}</span>` : "");
+
+  const W = Math.max(320, box.clientWidth || 640);
+  const M = { t: 16, r: 58, b: 30, l: 56 };
+  const plotW = W - M.l - M.r;
+  const H = Math.round(Math.min(320, Math.max(200, plotW * 0.42)));
+  const plotH = H - M.t - M.b;
+
+  const hi = Math.max(Math.max(...pts.map((p) => p.deep)), minDeep || 0) * 1.12 || 60;
+  const n = rows.length;
+  const bandW = plotW / n;
+  const barW = Math.max(2, Math.min(24, bandW - 2)); // 2px surface gap between neighbours
+  const cx = (i) => M.l + bandW * (i + 0.5);
+  const cy = (v) => M.t + plotH * (1 - v / hi);
+
+  box.innerHTML = "";
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img" });
+  svg.appendChild(el("title", {})).textContent =
+    `Deep sleep minutes over the last ${n} nights, against a ${minDeep}-minute minimum.`;
+
+  for (const t of timeTicks(0, hi)) {
+    const y = cy(t);
+    svg.appendChild(el("line", { x1: M.l, y1: y, x2: M.l + plotW, y2: y, stroke: "var(--grid)", "stroke-width": 1 }));
+    const lab = el("text", { x: M.l - 10, y: y + 4, "text-anchor": "end",
+      fill: "var(--text-muted)", "font-size": 11, "font-variant-numeric": "tabular-nums" });
+    lab.textContent = t === 0 ? "0" : fmtDuration(t);
+    svg.appendChild(lab);
+  }
+  svg.appendChild(el("line", { x1: M.l, y1: M.t + plotH, x2: M.l + plotW, y2: M.t + plotH, stroke: "var(--axis)", "stroke-width": 1 }));
+
+  // bars
+  rows.forEach((r, i) => {
+    if (r.deep == null) return;
+    const y = cy(r.deep);
+    const h = M.t + plotH - y;
+    svg.appendChild(el("path", { d: barPath(cx(i) - barW / 2, y, barW, h, 4), fill: "var(--series-deep)" }));
+  });
+
+  // minimum reference line
+  if (minDeep > 0 && minDeep <= hi) {
+    const y = cy(minDeep);
+    svg.appendChild(el("line", { x1: M.l, y1: y, x2: M.l + plotW, y2: y,
+      stroke: "var(--text-muted)", "stroke-width": 2, "stroke-dasharray": "5 4", "stroke-linecap": "round" }));
+    const lab = el("text", { x: M.l + plotW + 6, y: y + 4, fill: "var(--text-secondary)", "font-size": 11 });
+    lab.textContent = "Min";
+    svg.appendChild(lab);
+  }
+
+  if (showTrend) {
+    let d = "", pen = false;
+    trend.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += (pen ? "L" : "M") + cx(i) + "," + cy(v);
+      pen = true;
+    });
+    svg.appendChild(el("path", { d, fill: "none", stroke: "var(--trend)", "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.75 }));
+  }
+
+  for (const i of xLabelIndices(n, plotW)) {
+    const lab = el("text", { x: cx(i), y: H - 10, "text-anchor": "middle", fill: "var(--text-muted)", "font-size": 11 });
+    lab.textContent = fmtDate(rows[i].date);
+    svg.appendChild(lab);
+  }
+
+  // value on the most recent cap only
+  const lastI = rows.reduce((acc, r, i) => (r.deep != null ? i : acc), -1);
+  if (lastI >= 0) {
+    const lab = el("text", { x: cx(lastI), y: cy(rows[lastI].deep) - 8, "text-anchor": "middle",
+      fill: "var(--text-primary)", "font-size": 11, "font-weight": 600 });
+    lab.textContent = fmtDuration(rows[lastI].deep);
+    svg.appendChild(lab);
+  }
+
+  box.appendChild(svg);
+  const tip = tooltipFor(box);
+  const hit = el("rect", { x: M.l, y: M.t, width: plotW, height: plotH, fill: "transparent" });
+  svg.appendChild(hit);
+
+  function showAt(i) {
+    const r = rows[i];
+    if (!r || r.deep == null) { tip.classList.remove("on"); return; }
+    const short = minDeep > 0 && r.deep < minDeep;
+    tip.innerHTML =
+      `<div class="tt-date">${fmtDate(r.date, true)}</div>` +
+      `<div class="tt-row"><span class="swatch" style="width:8px;height:8px;border-radius:2px;background:var(--series-deep)"></span>` +
+      `<span class="tt-val">${fmtDuration(r.deep)}</span></div>` +
+      (minDeep > 0 ? `<div class="tt-date" style="margin:4px 0 0">${
+        short ? fmtDuration(minDeep - r.deep) + " under the minimum"
+              : r.deep === minDeep ? "exactly at the minimum"
+              : fmtDuration(r.deep - minDeep) + " over the minimum"}</div>` : "");
+    tip.classList.add("on");
+    placeTip(tip, box, cx(i), cy(r.deep));
+  }
+
+  const nearest = (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const scale = W / rect.width;
+    const px = (evt.clientX - rect.left) * scale;
+    return Math.max(0, Math.min(n - 1, Math.floor((px - M.l) / bandW)));
+  };
+  hit.addEventListener("pointermove", (e) => showAt(nearest(e)));
+  hit.addEventListener("pointerleave", () => tip.classList.remove("on"));
+
+  svg.setAttribute("tabindex", "0");
+  let focusI = lastI;
+  svg.addEventListener("focus", () => showAt(focusI));
+  svg.addEventListener("blur", () => tip.classList.remove("on"));
+  svg.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    let j = focusI;
+    for (let s = 0; s < n; s++) {
+      j += e.key === "ArrowLeft" ? -1 : 1;
+      if (j < 0 || j >= n) return;
+      if (rows[j].deep != null) { focusI = j; showAt(j); return; }
+    }
+  });
+}
+
+/* ══ stat tiles ═══════════════════════════════════════════════════════════ */
+function renderKpis() {
+  const rows = seriesForRange();
+  const beds = rows.filter((r) => r.bedAxis != null);
+  const deeps = rows.filter((r) => r.deep != null);
+  const targetAxis = toAxis(hmToMin(state.settings.targetBedtime) ?? 0);
+  const minDeep = state.settings.minDeepMinutes;
+
+  const avgBed = beds.length ? beds.reduce((a, r) => a + r.bedAxis, 0) / beds.length : null;
+  const avgDeep = deeps.length ? deeps.reduce((a, r) => a + r.deep, 0) / deeps.length : null;
+  const onTarget = beds.filter((r) => r.bedAxis <= targetAxis).length;
+  const metDeep = deeps.filter((r) => r.deep >= minDeep).length;
+
+  // streak: consecutive most-recent nights meeting both goals that are recorded
+  let streak = 0;
+  const all = Object.keys(state.nights).sort();
+  for (let i = all.length - 1; i >= 0; i--) {
+    const nightRec = state.nights[all[i]];
+    const bm = nightRec.bedtime != null ? toAxis(hmToMin(nightRec.bedtime)) : null;
+    if (bm == null || bm > targetAxis) break;
+    if (typeof nightRec.deepMinutes === "number" && nightRec.deepMinutes < minDeep) break;
+    streak++;
+  }
+
+  const label = rangeDays > 0 ? `last ${rangeDays} nights` : "all time";
+  const tiles = [
+    { label: `Average bedtime · ${label}`, value: avgBed == null ? "—" : axisLabel(avgBed),
+      delta: avgBed == null ? "" : deltaVsTarget(avgBed, targetAxis) },
+    { label: `Nights on target · ${label}`, value: beds.length ? `${onTarget} of ${beds.length}` : "—",
+      delta: beds.length ? `${Math.round((onTarget / beds.length) * 100)}% at or before ${state.settings.targetBedtime}` : "" },
+    { label: `Average deep sleep · ${label}`, value: avgDeep == null ? "—" : fmtDuration(Math.round(avgDeep)),
+      delta: avgDeep == null ? "" : (avgDeep >= minDeep
+        ? `<span class="up">▲ ${fmtDuration(Math.round(avgDeep - minDeep))} over minimum</span>`
+        : `<span class="down">▼ ${fmtDuration(Math.round(minDeep - avgDeep))} under minimum</span>`) +
+        ` · ${metDeep} of ${deeps.length} nights met it` },
+    { label: "Current streak", value: streak ? `${streak} night${streak === 1 ? "" : "s"}` : "—",
+      delta: streak ? "consecutive nights meeting both goals" : "meet both goals tonight to start one" },
+  ];
+
+  document.getElementById("kpis").innerHTML = tiles.map((t) =>
+    `<div class="tile"><div class="label">${t.label}</div>` +
+    `<div class="value">${t.value}</div>` +
+    (t.delta ? `<div class="delta">${t.delta}</div>` : "") + `</div>`
+  ).join("");
+}
+
+function deltaVsTarget(avgAxis, targetAxis) {
+  const diff = Math.round(avgAxis - targetAxis);
+  if (diff === 0) return "exactly on target";
+  return diff < 0
+    ? `<span class="up">▲ ${fmtDuration(-diff)} before target</span>`
+    : `<span class="down">▼ ${fmtDuration(diff)} after target</span>`;
+}
+
+/* ══ table view ═══════════════════════════════════════════════════════════ */
+function renderTable() {
+  const tbody = document.getElementById("tbody");
+  const rows = seriesForRange().slice().reverse();
+  const targetAxis = toAxis(hmToMin(state.settings.targetBedtime) ?? 0);
+  const minDeep = state.settings.minDeepMinutes;
+  const withData = rows.filter((r) => r.bedAxis != null || r.deep != null);
+
+  if (!withData.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-secondary);padding:24px 10px">No nights recorded yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = withData.map((r) => {
+    const bedCell = r.bedAxis == null ? "—" : axisLabel(r.bedAxis);
+    let bedFlag = "—";
+    if (r.bedAxis != null) {
+      const d = Math.round(r.bedAxis - targetAxis);
+      bedFlag = d <= 0
+        ? `<span class="pill met"><span class="dot" style="background:var(--good)"></span>${d === 0 ? "on target" : fmtDuration(-d) + " early"}</span>`
+        : `<span class="pill miss"><span class="dot" style="background:var(--critical)"></span>${fmtDuration(d)} late</span>`;
+    }
+    let deepFlag = "—";
+    if (r.deep != null && minDeep > 0) {
+      const d = r.deep - minDeep;
+      deepFlag = d >= 0
+        ? `<span class="pill met"><span class="dot" style="background:var(--good)"></span>${d === 0 ? "at minimum" : fmtDuration(d) + " over"}</span>`
+        : `<span class="pill miss"><span class="dot" style="background:var(--critical)"></span>${fmtDuration(-d)} under</span>`;
+    }
+    return `<tr data-date="${r.date}">
+      <td>${fmtDate(r.date, true)}</td>
+      <td class="num js-bed">${bedCell}</td>
+      <td>${bedFlag}</td>
+      <td class="num js-deep">${r.deep == null ? "—" : fmtDuration(r.deep)}</td>
+      <td>${deepFlag}</td>
+      <td style="color:var(--text-secondary)">${r.source === "apple" ? "Apple Health" : r.source === "csv" ? "CSV" : r.bedAxis != null || r.deep != null ? "Manual" : "—"}</td>
+      <td><button class="mini js-edit">Edit</button> <button class="mini danger js-del">Delete</button></td>
+    </tr>`;
+  }).join("");
+}
+
+document.getElementById("tbody").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr");
+  if (!tr) return;
+  const date = tr.dataset.date;
+
+  if (e.target.classList.contains("js-del")) {
+    if (!confirm(`Delete the night of ${fmtDate(date, true)}?`)) return;
+    delete state.nights[date];
+    save();
+    renderAll();
+    return;
+  }
+
+  if (e.target.classList.contains("js-edit")) {
+    const n = state.nights[date] || {};
+    tr.querySelector(".js-bed").innerHTML = `<input type="time" class="e-bed" value="${n.bedtime || ""}">`;
+    tr.querySelector(".js-deep").innerHTML =
+      `<input type="number" class="e-deep" min="0" max="600" step="1" value="${n.deepMinutes ?? ""}">`;
+    e.target.outerHTML = `<button class="mini primary js-save">Save</button>`;
+    return;
+  }
+
+  if (e.target.classList.contains("js-save")) {
+    const bed = tr.querySelector(".e-bed").value;
+    const deepRaw = tr.querySelector(".e-deep").value;
+    const rec = state.nights[date] || {};
+    if (bed) rec.bedtime = bed; else delete rec.bedtime;
+    const dv = deepRaw === "" ? null : Number(deepRaw);
+    if (dv != null && Number.isFinite(dv) && dv >= 0) rec.deepMinutes = Math.round(dv);
+    else delete rec.deepMinutes;
+    if (rec.bedtime == null && rec.deepMinutes == null) delete state.nights[date];
+    else { rec.source = "manual"; state.nights[date] = rec; }
+    save();
+    renderAll();
+  }
+});
+
+/* ══ render orchestration ═════════════════════════════════════════════════ */
+function renderAll() {
+  TOK = null;
+  renderKpis();
+  if (showTable) renderTable();
+  else { renderBedtime(); renderDeep(); }
+  refreshLogHint();
+}
+
+function refreshLogHint() {
+  const tonight = nightOf(new Date());
+  const rec = state.nights[tonight];
+  document.getElementById("logHint").textContent = rec && rec.bedtime
+    ? `Tonight already logged at ${axisLabel(toAxis(hmToMin(rec.bedtime)))} — click to replace`
+    : `Tonight · ${fmtDate(tonight)}`;
+}
+
+function setStatus(id, msg, kind) {
+  const n = document.getElementById(id);
+  n.textContent = msg;
+  n.className = "status" + (kind ? " " + kind : "");
+}
+
+/* ══ actions ══════════════════════════════════════════════════════════════ */
+document.getElementById("logBtn").addEventListener("click", () => {
+  const now = new Date();
+  const date = nightOf(now);
+  const rec = state.nights[date] || {};
+  const prev = rec.bedtime;
+  rec.bedtime = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  rec.source = rec.source || "manual";
+  state.nights[date] = rec;
+  save();
+  renderAll();
+  setStatus("bedStatus",
+    `Logged ${axisLabel(toAxis(hmToMin(rec.bedtime)))} for the night of ${fmtDate(date, true)}` +
+    (prev ? ` (was ${axisLabel(toAxis(hmToMin(prev)))})` : "") + ".", "ok");
+});
+
+document.getElementById("bedSave").addEventListener("click", () => {
+  const date = document.getElementById("bedDate").value;
+  const time = document.getElementById("bedTime").value;
+  if (!date || !time) { setStatus("bedStatus", "Pick both a date and a time.", "err"); return; }
+  const rec = state.nights[date] || {};
+  rec.bedtime = time;
+  rec.source = rec.source || "manual";
+  state.nights[date] = rec;
+  save();
+  renderAll();
+  setStatus("bedStatus", `Saved ${axisLabel(toAxis(hmToMin(time)))} for the night of ${fmtDate(date, true)}.`, "ok");
+});
+
+document.getElementById("deepSave").addEventListener("click", () => {
+  const date = document.getElementById("deepDate").value;
+  const raw = document.getElementById("deepMins").value;
+  if (!date) { setStatus("deepStatus", "Pick the night this belongs to.", "err"); return; }
+  const v = Number(raw);
+  if (raw === "" || !Number.isFinite(v) || v < 0) { setStatus("deepStatus", "Enter deep sleep in minutes.", "err"); return; }
+  const rec = state.nights[date] || {};
+  rec.deepMinutes = Math.round(v);
+  rec.source = rec.source || "manual";
+  state.nights[date] = rec;
+  save();
+  renderAll();
+  setStatus("deepStatus", `Saved ${fmtDuration(Math.round(v))} for the night of ${fmtDate(date, true)}.`, "ok");
+});
+
+document.getElementById("targetBed").addEventListener("change", (e) => {
+  if (hmToMin(e.target.value) == null) return;
+  state.settings.targetBedtime = e.target.value;
+  save();
+  renderAll();
+});
+
+document.getElementById("targetDeep").addEventListener("change", (e) => {
+  const v = Number(e.target.value);
+  if (!Number.isFinite(v) || v < 0) return;
+  state.settings.minDeepMinutes = Math.round(v);
+  save();
+  syncGoalHint();
+  renderAll();
+});
+
+function syncGoalHint() {
+  document.getElementById("targetDeepHint").textContent = `= ${fmtDuration(state.settings.minDeepMinutes)}`;
+}
+
+/* range + view toggles */
+document.getElementById("rangeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  rangeDays = Number(b.dataset.days);
+  [...e.currentTarget.children].forEach((x) => x.setAttribute("aria-pressed", x === b));
+  renderAll();
+});
+
+function setView(table) {
+  showTable = table;
+  document.getElementById("viewChart").setAttribute("aria-pressed", String(!table));
+  document.getElementById("viewTable").setAttribute("aria-pressed", String(table));
+  document.getElementById("chartsView").classList.toggle("hidden", table);
+  document.getElementById("tableView").classList.toggle("hidden", !table);
+  renderAll();
+}
+document.getElementById("viewChart").addEventListener("click", () => setView(false));
+document.getElementById("viewTable").addEventListener("click", () => setView(true));
+
+/* theme */
+function applyTheme(t) {
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme");
+  requestAnimationFrame(renderAll);
+}
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const next = cur === "dark" ? "light" : cur === "light" ? "" : "dark";
+  if (next) localStorage.setItem(THEME_KEY, next); else localStorage.removeItem(THEME_KEY);
+  applyTheme(next);
+});
+
+/* ══ export / import ══════════════════════════════════════════════════════ */
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `sleep-data-${ymd(new Date())}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setStatus("dataStatus", `Exported ${Object.keys(state.nights).length} nights.`, "ok");
+});
+
+document.getElementById("importBtn").addEventListener("click", () => document.getElementById("jsonFile").click());
+document.getElementById("jsonFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || typeof d.nights !== "object") throw new Error("not a sleep-tracker backup");
+    let added = 0, updated = 0;
+    for (const [date, rec] of Object.entries(d.nights)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (state.nights[date]) updated++; else added++;
+      state.nights[date] = Object.assign({}, state.nights[date], rec);
+    }
+    if (d.settings) Object.assign(state.settings, d.settings);
+    save();
+    syncInputs();
+    renderAll();
+    setStatus("dataStatus", `Imported — ${added} new night${added === 1 ? "" : "s"}, ${updated} updated.`, "ok");
+  } catch (err) {
+    setStatus("dataStatus", "Could not read that file: " + err.message, "err");
+  }
+  e.target.value = "";
+});
+
+document.getElementById("wipeBtn").addEventListener("click", () => {
+  if (!confirm("Delete every night and reset your goals? Export a backup first if you want to keep it.")) return;
+  state = blank();
+  save();
+  syncInputs();
+  renderAll();
+  setStatus("dataStatus", "All data deleted.", "");
+});
+
+/* ══ Apple Health / CSV import ════════════════════════════════════════════ */
+const DEEP_VALUES = new Set(["HKCategoryValueSleepAnalysisAsleepDeep"]);
+const ASLEEP_VALUES = new Set([
+  "HKCategoryValueSleepAnalysisAsleepDeep",
+  "HKCategoryValueSleepAnalysisAsleepCore",
+  "HKCategoryValueSleepAnalysisAsleepREM",
+  "HKCategoryValueSleepAnalysisAsleepUnspecified",
+  "HKCategoryValueSleepAnalysisAsleep",
+  "HKCategoryValueSleepAnalysisInBed",
+]);
+
+const RE_RECORD = /<Record\b[^>]*>/g;
+const RE_START = /startDate="([^"]*)"/;
+const RE_END = /endDate="([^"]*)"/;
+const RE_VALUE = /value="([^"]*)"/;
+const RE_SOURCE = /sourceName="([^"]*)"/;
+const RE_HKDATE = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})\s*([+-])(\d{2}):?(\d{2})$/;
+
+/** Apple's "2026-08-02 23:15:00 -0400" → {epoch, wall clock parts}. */
+function parseHkDate(s) {
+  const m = RE_HKDATE.exec(String(s || "").trim());
+  if (!m) return null;
+  const [, y, mo, d, h, mi, sec, sign, oh, om] = m;
+  const offMin = (sign === "-" ? -1 : 1) * (+oh * 60 + +om);
+  const epoch = Date.UTC(+y, +mo - 1, +d, +h, +mi, +sec) - offMin * 60000;
+  return { epoch, y: +y, mo: +mo, d: +d, h: +h, mi: +mi };
+}
+
+async function importHealthXml(file, onProgress) {
+  const CHUNK = 8 * 1024 * 1024;
+  const OVERLAP = 8192;
+  const seen = new Set();
+  const deepBySource = new Map();  // night -> Map(source -> minutes)
+  const earliest = new Map();      // night -> {h, mi}
+  let pos = 0, carry = "";
+
+  while (pos < file.size) {
+    const text = carry + await file.slice(pos, pos + CHUNK).text();
+    RE_RECORD.lastIndex = 0;
+    let m, lastEnd = 0;
+    while ((m = RE_RECORD.exec(text))) {
+      lastEnd = m.index + m[0].length;
+      const tag = m[0];
+      if (tag.indexOf("SleepAnalysis") === -1) continue;
+
+      const vm = RE_VALUE.exec(tag);
+      if (!vm || !ASLEEP_VALUES.has(vm[1])) continue;
+      const sm = RE_START.exec(tag), em = RE_END.exec(tag);
+      if (!sm || !em) continue;
+
+      const key = vm[1] + "|" + sm[1] + "|" + em[1];
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const st = parseHkDate(sm[1]), en = parseHkDate(em[1]);
+      if (!st || !en) continue;
+
+      // Night is assigned by the wall clock where it was recorded, not the viewer's zone.
+      const night = nightOfParts(st.y, st.mo, st.d, st.h);
+      const src = (RE_SOURCE.exec(tag) || [, "Unknown"])[1];
+
+      if (DEEP_VALUES.has(vm[1])) {
+        const mins = (en.epoch - st.epoch) / 60000;
+        if (mins > 0 && mins < 1440) {
+          if (!deepBySource.has(night)) deepBySource.set(night, new Map());
+          const bySrc = deepBySource.get(night);
+          bySrc.set(src, (bySrc.get(src) || 0) + mins);
+        }
+      }
+
+      const cur = earliest.get(night);
+      const axis = toAxis(st.h * 60 + st.mi);
+      if (!cur || axis < cur.axis) earliest.set(night, { axis, h: st.h, mi: st.mi });
+    }
+    carry = text.slice(Math.max(lastEnd, text.length - OVERLAP));
+    pos += CHUNK;
+    if (onProgress) onProgress(Math.min(1, pos / file.size));
+  }
+
+  // One source per night — summing across devices would double-count.
+  const deep = new Map();
+  for (const [night, bySrc] of deepBySource) {
+    let best = 0;
+    for (const v of bySrc.values()) if (v > best) best = v;
+    deep.set(night, Math.round(best));
+  }
+  return { deep, earliest };
+}
+
+/* CSV — flexible header detection for Health Auto Export, Bevel, etc. */
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (c !== "\r") cell += c;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((v) => v.trim() !== ""));
+}
+
+/** "1h 23m" / "83" / "1.4" → minutes, honouring an hours-flavoured header. */
+function toMinutes(raw, headerSaysHours) {
+  const s = String(raw).trim();
+  if (!s) return null;
+  const hm = /^(?:(\d+(?:\.\d+)?)\s*h)?\s*(?:(\d+(?:\.\d+)?)\s*m)?$/i.exec(s);
+  if (hm && (hm[1] || hm[2])) return Math.round((+(hm[1] || 0)) * 60 + (+(hm[2] || 0)));
+  const colon = /^(\d+):([0-5]\d)$/.exec(s);
+  if (colon) return +colon[1] * 60 + +colon[2];
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(headerSaysHours ? n * 60 : n);
+}
+
+function importCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) throw new Error("no rows found");
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+
+  const dateI = head.findIndex((h) => /date|day|night|start/.test(h));
+  const deepI = head.findIndex((h) => /deep/.test(h));
+  const bedI = head.findIndex((h) => /bed ?time|in ?bed|sleep ?start|start ?time/.test(h));
+  if (dateI === -1) throw new Error("no date column");
+  if (deepI === -1 && bedI === -1) throw new Error("no deep-sleep or bedtime column");
+  const hours = deepI !== -1 && /hour|hr|\(h\)/.test(head[deepI]);
+
+  const deep = new Map(), earliest = new Map();
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const dRaw = (r[dateI] || "").trim();
+    const dm = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/.exec(dRaw);
+    if (!dm) continue;
+    const hh = dm[4] != null ? +dm[4] : 23; // date-only rows are already night-of
+    const night = dm[4] != null ? nightOfParts(+dm[1], +dm[2], +dm[3], hh) : dRaw.slice(0, 10);
+
+    if (deepI !== -1) {
+      const v = toMinutes(r[deepI], hours);
+      if (v != null && v >= 0 && v < 1440) deep.set(night, v);
+    }
+    if (bedI !== -1) {
+      const bm = /(\d{1,2}):(\d{2})/.exec(r[bedI] || "");
+      if (bm) earliest.set(night, { h: +bm[1], mi: +bm[2] });
+    }
+  }
+  return { deep, earliest };
+}
+
+function applyImport({ deep, earliest }, sourceTag) {
+  const fillBed = document.getElementById("fillBed").checked;
+  let deepN = 0, bedN = 0;
+  for (const [night, mins] of deep) {
+    const rec = state.nights[night] || {};
+    rec.deepMinutes = mins;
+    rec.source = sourceTag;
+    state.nights[night] = rec;
+    deepN++;
+  }
+  if (fillBed) {
+    for (const [night, t] of earliest) {
+      const rec = state.nights[night] || {};
+      if (rec.bedtime) continue; // never overwrite a night you logged by hand
+      rec.bedtime = `${pad2(t.h)}:${pad2(t.mi)}`;
+      rec.source = rec.source || sourceTag;
+      state.nights[night] = rec;
+      bedN++;
+    }
+  }
+  save();
+  renderAll();
+  return { deepN, bedN };
+}
+
+async function handleFile(f) {
+  if (!f) return;
+  const prog = document.getElementById("prog");
+  const bar = prog.querySelector("i");
+  setStatus("impStatus", `Reading ${f.name}…`, "");
+  try {
+    let result, tag;
+    if (/\.csv$|\.txt$/i.test(f.name)) {
+      result = importCsv(await f.text());
+      tag = "csv";
+    } else {
+      prog.classList.remove("hidden");
+      bar.style.width = "0%";
+      result = await importHealthXml(f, (p) => { bar.style.width = Math.round(p * 100) + "%"; });
+      tag = "apple";
+    }
+    const { deepN, bedN } = applyImport(result, tag);
+    setStatus("impStatus",
+      deepN || bedN
+        ? `Imported deep sleep for ${deepN} night${deepN === 1 ? "" : "s"}` +
+          (bedN ? `, and filled ${bedN} missing bedtime${bedN === 1 ? "" : "s"}` : "") + "."
+        : "No sleep records found in that file.",
+      deepN || bedN ? "ok" : "err");
+  } catch (err) {
+    console.error(err);
+    setStatus("impStatus", "Import failed: " + err.message, "err");
+  } finally {
+    prog.classList.add("hidden");
+  }
+}
+
+const drop = document.getElementById("drop");
+document.getElementById("pickBtn").addEventListener("click", () => document.getElementById("file").click());
+document.getElementById("file").addEventListener("change", (e) => { handleFile(e.target.files[0]); e.target.value = ""; });
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => handleFile(e.dataTransfer.files[0]));
+
+/* ══ Google Drive sync ════════════════════════════════════════════════════
+   Uses Google Identity Services (the token-client / implicit-grant model for
+   pure client-side apps — no server, no client secret) and the drive.file
+   scope, which only ever sees files this app itself created. One JSON file,
+   `sleep-tracker-data.json`, lives in the user's My Drive. See README.md
+   § "Google Drive sync" for the Cloud Console setup this depends on. */
+let gTokenClient = null;
+let gAccessToken = null;
+let gSyncTimer = null;
+
+window.__gisLoaded = function () {
+  if (!GOOGLE_CLIENT_ID || !window.google) return;
+  gTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (resp) => {
+      if (resp.error) { setStatus("driveStatus", "Could not connect: " + resp.error, "err"); return; }
+      gAccessToken = resp.access_token;
+      await driveConnect();
+    },
+  });
+};
+
+function driveSetConnectedUI(connected) {
+  document.getElementById("driveConnectBtn").classList.toggle("hidden", connected);
+  document.getElementById("driveSyncBtn").classList.toggle("hidden", !connected);
+  document.getElementById("driveDisconnectBtn").classList.toggle("hidden", !connected);
+}
+
+async function driveApi(url, opts) {
+  const r = await fetch(url, Object.assign({}, opts, {
+    headers: Object.assign({ Authorization: "Bearer " + gAccessToken }, (opts && opts.headers) || {}),
+  }));
+  if (r.status === 401) {
+    gAccessToken = null;
+    driveSetConnectedUI(false);
+    throw new Error("Drive session expired — click Connect Google Drive again.");
+  }
+  if (!r.ok) throw new Error("Drive request failed (HTTP " + r.status + ")");
+  return r;
+}
+
+async function driveFind() {
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id)`);
+  const d = await r.json();
+  return d.files && d.files[0] ? d.files[0].id : null;
+}
+
+async function driveDownload(fileId) {
+  const r = await driveApi(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  return r.json();
+}
+
+async function driveUpload(fileId, data) {
+  const body = JSON.stringify(data, null, 2);
+  if (fileId) {
+    await driveApi(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    return fileId;
+  }
+  // First-ever save: no file to PATCH yet, so create it — multipart carries
+  // both the Drive metadata (the name) and the JSON content in one request.
+  const boundary = "sleeptrackerboundary";
+  const metadata = JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: "application/json" });
+  const multipart =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+  const r = await driveApi("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+    method: "POST",
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+    body: multipart,
+  });
+  const d = await r.json();
+  return d.id;
+}
+
+/** Pull the remote file (if any), merge it into local state — local wins on a
+    field-by-field conflict, so an in-progress edit is never clobbered — then
+    push the merged result back up. This is last-write-wins per field, not a
+    true multi-device merge; good enough for one person's own devices. */
+async function driveMergeAndPush() {
+  let fileId = localStorage.getItem(DRIVE_FILEID_KEY);
+  if (!fileId) fileId = await driveFind();
+  if (fileId) {
+    const remote = await driveDownload(fileId).catch(() => null);
+    if (remote && typeof remote.nights === "object") {
+      for (const [date, rec] of Object.entries(remote.nights)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+        state.nights[date] = Object.assign({}, rec, state.nights[date]);
+      }
+      if (remote.settings) state.settings = Object.assign({}, remote.settings, state.settings);
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+  }
+  fileId = await driveUpload(fileId, state);
+  localStorage.setItem(DRIVE_FILEID_KEY, fileId);
+  return fileId;
+}
+
+async function driveConnect() {
+  setStatus("driveStatus", "Connecting…", "");
+  try {
+    await driveMergeAndPush();
+    driveSetConnectedUI(true);
+    syncInputs();
+    renderAll();
+    setStatus("driveStatus", "Connected — synced just now.", "ok");
+  } catch (err) {
+    setStatus("driveStatus", err.message, "err");
+  }
+}
+
+/** Called from save() on every local edit — pushes to Drive a moment later
+    so rapid edits (e.g. typing) don't fire a request per keystroke. */
+function queueDriveSync() {
+  if (!gAccessToken) return;
+  clearTimeout(gSyncTimer);
+  gSyncTimer = setTimeout(async () => {
+    try {
+      const fileId = localStorage.getItem(DRIVE_FILEID_KEY);
+      const id = await driveUpload(fileId, state);
+      localStorage.setItem(DRIVE_FILEID_KEY, id);
+      setStatus("driveStatus", "Synced " + new Date().toLocaleTimeString(), "ok");
+    } catch (err) {
+      setStatus("driveStatus", err.message, "err");
+    }
+  }, 1500);
+}
+
+document.getElementById("driveConnectBtn").addEventListener("click", () => {
+  if (!GOOGLE_CLIENT_ID) {
+    setStatus("driveStatus", "Add your Google Client ID in index.html first — see README § Google Drive sync.", "err");
+    return;
+  }
+  if (!gTokenClient) {
+    setStatus("driveStatus", "Still loading Google sign-in — try again in a second.", "err");
+    return;
+  }
+  gTokenClient.requestAccessToken({ prompt: "consent" });
+});
+
+document.getElementById("driveSyncBtn").addEventListener("click", async () => {
+  setStatus("driveStatus", "Syncing…", "");
+  try {
+    await driveMergeAndPush();
+    renderAll();
+    setStatus("driveStatus", "Synced just now.", "ok");
+  } catch (err) {
+    setStatus("driveStatus", err.message, "err");
+  }
+});
+
+document.getElementById("driveDisconnectBtn").addEventListener("click", () => {
+  if (gAccessToken && window.google) google.accounts.oauth2.revoke(gAccessToken, () => {});
+  gAccessToken = null;
+  driveSetConnectedUI(false);
+  setStatus("driveStatus", "Disconnected for this session. Your data stays saved in this browser.", "");
+});
+
+if (!GOOGLE_CLIENT_ID) {
+  setStatus("driveStatus", "Add a Google Client ID in index.html to enable Drive sync — see README.", "");
+}
+
+/* ══ boot ═════════════════════════════════════════════════════════════════ */
+function syncInputs() {
+  document.getElementById("targetBed").value = state.settings.targetBedtime;
+  document.getElementById("targetDeep").value = state.settings.minDeepMinutes;
+  const tonight = nightOf(new Date());
+  document.getElementById("bedDate").value = tonight;
+  document.getElementById("deepDate").value = tonight;
+  const rec = state.nights[tonight];
+  document.getElementById("bedTime").value = (rec && rec.bedtime) || state.settings.targetBedtime;
+  syncGoalHint();
+}
+
+applyTheme(localStorage.getItem(THEME_KEY) || "");
+syncInputs();
+[...document.getElementById("rangeSeg").children].forEach((b) =>
+  b.setAttribute("aria-pressed", String(Number(b.dataset.days) === rangeDays)));
+renderAll();
+
+let rt;
+window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderAll, 120); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => requestAnimationFrame(renderAll));
+</script>
+</body>
+</html>
