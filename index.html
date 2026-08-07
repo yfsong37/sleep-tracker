@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sleep Tracker</title>
+<title>Health Tracker</title>
 <script src="https://accounts.google.com/gsi/client" async defer onload="window.__gisLoaded && window.__gisLoaded()"></script>
 <style>
 /* ── tokens ──────────────────────────────────────────────────────────────── */
@@ -19,10 +19,12 @@
   --border: rgba(11,11,11,0.10);
   --series-bed: #2a78d6;    /* categorical slot 1 — blue */
   --series-deep: #1baf7a;   /* categorical slot 3 — aqua */
+  --series-weight: #e0a30e; /* categorical slot 2 — amber (also used, at reduced opacity, for cardio/other activity bars) */
   --trend: #52514e;         /* de-emphasis (emphasis pattern) */
   --good: #0ca30c;
   --critical: #d03b3b;
   --accent-wash: rgba(42,120,214,0.10);
+  --weight-wash: rgba(224,163,14,0.12);
   --hover-wash: rgba(11,11,11,0.04);
   --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 4px 12px rgba(11,11,11,0.04);
 }
@@ -39,10 +41,12 @@
     --border: rgba(255,255,255,0.10);
     --series-bed: #3987e5;
     --series-deep: #199e70;
+    --series-weight: #bb7e12;
     --trend: #c3c2b7;
     --good: #0ca30c;
     --critical: #d03b3b;
     --accent-wash: rgba(57,135,229,0.14);
+    --weight-wash: rgba(187,126,18,0.16);
     --hover-wash: rgba(255,255,255,0.06);
     --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
   }
@@ -203,6 +207,50 @@ tbody tr:hover { background: var(--hover-wash); }
 td .mini { padding: 3px 7px; font-size: 12px; }
 td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 
+/* ── weight input ────────────────────────────────────────────────────────── */
+.weight-group { display: flex; align-items: stretch; gap: 6px; }
+.wstep {
+  font-variant-numeric: tabular-nums; font-size: 13px; padding: 0 10px;
+  min-width: 44px; flex: none;
+}
+.wfield-wrap { position: relative; flex: 1 1 140px; min-width: 120px; }
+.wfield-wrap input {
+  width: 100%; font-size: 20px; font-weight: 600; text-align: center;
+  padding: 9px 30px 9px 6px; font-variant-numeric: tabular-nums; cursor: ns-resize;
+  touch-action: pan-x; user-select: none;
+}
+.wfield-wrap input:focus { cursor: text; }
+.wfield-wrap .wunit { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-muted); pointer-events: none; }
+.wfield-hint { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 4px; }
+#weightVal { -moz-appearance: textfield; }
+#weightVal::-webkit-outer-spin-button, #weightVal::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ── exercise ────────────────────────────────────────────────────────────── */
+.lift-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.lift-toggle button { border: 0; border-radius: 0; padding: 8px 14px; }
+.lift-toggle button + button { border-left: 1px solid var(--border); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  background: var(--accent-wash); border: 1px solid var(--border);
+  border-radius: 999px; padding: 4px 6px 4px 10px;
+}
+.chip button {
+  border: 0; background: none; padding: 0 4px; border-radius: 999px;
+  color: var(--text-muted); font-size: 13px; line-height: 1;
+}
+
+/* ── activity strip ──────────────────────────────────────────────────────── */
+.stripbox { position: relative; width: 100%; }
+.stripbox svg { display: block; width: 100%; height: auto; }
+.strip-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: var(--text-secondary); }
+.strip-legend .item { display: inline-flex; align-items: center; gap: 6px; }
+.strip-legend .sq {
+  width: 12px; height: 12px; border-radius: 3px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700; color: var(--surface-1); background: var(--text-secondary);
+}
+
 /* ── misc ────────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 .filedrop {
@@ -220,6 +268,9 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 @media (max-width: 560px) {
   .wrap { padding: 16px 14px 48px; }
   .tile .value { font-size: 22px; }
+  .weight-group { width: 100%; }
+  .wstep { min-width: 38px; padding: 0 6px; }
+  header.top { flex-wrap: wrap; row-gap: 8px; }
 }
 </style>
 </head>
@@ -227,13 +278,85 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 <div class="wrap">
 
 <header class="top">
-  <h1>Sleep Tracker</h1>
+  <h1>Health Tracker</h1>
   <div class="spacer"></div>
+  <button class="subtle" onclick="document.getElementById('weightCard').scrollIntoView({behavior:'smooth'})">Weight</button>
+  <button class="subtle" onclick="document.getElementById('exerciseCard').scrollIntoView({behavior:'smooth'})">Exercise</button>
+  <button class="subtle" onclick="document.getElementById('sleepCard').scrollIntoView({behavior:'smooth'})">Sleep</button>
   <button id="themeBtn" class="subtle" title="Toggle light / dark">Theme</button>
 </header>
 
-<!-- ── logging ─────────────────────────────────────────────────────────── -->
-<section class="card">
+<!-- ── weight logging ──────────────────────────────────────────────────── -->
+<section class="card" id="weightCard">
+  <h2>Weight</h2>
+  <p class="sub">Pre-filled with your most recent entry — scroll, drag, or type to adjust.</p>
+  <div class="row" style="align-items:flex-start">
+    <label class="field">
+      <span>Date</span>
+      <input type="date" id="weightDate">
+    </label>
+    <label class="field">
+      <span>Weight</span>
+      <div class="weight-group">
+        <button class="wstep" id="wMinus1" data-step="-1" title="−1 kg">−1</button>
+        <button class="wstep" id="wMinus01" data-step="-0.1" title="−0.1 kg">−.1</button>
+        <div class="wfield-wrap">
+          <input type="number" id="weightVal" step="0.01" inputmode="decimal">
+          <span class="wunit">kg</span>
+        </div>
+        <button class="wstep" id="wPlus01" data-step="0.1" title="+0.1 kg">+.1</button>
+        <button class="wstep" id="wPlus1" data-step="1" title="+1 kg">+1</button>
+      </div>
+      <span class="wfield-hint">scroll wheel or drag up/down on the number to nudge it</span>
+    </label>
+    <button id="weightSave" class="primary">Save</button>
+  </div>
+  <div class="status" id="weightStatus" role="status" aria-live="polite"></div>
+</section>
+
+<!-- ── exercise logging ────────────────────────────────────────────────── -->
+<section class="card" id="exerciseCard">
+  <h2>Exercise</h2>
+  <p class="sub">Weightlifting day, cardio minutes, and anything else — all for one date.</p>
+  <div class="row" style="margin-bottom:14px">
+    <label class="field">
+      <span>Date</span>
+      <input type="date" id="exerciseDate">
+    </label>
+  </div>
+  <div class="row" style="align-items:flex-end;margin-bottom:14px">
+    <label class="field">
+      <span>Weightlifting</span>
+      <div class="lift-toggle" id="liftToggle" role="group" aria-label="Weightlifting day">
+        <button type="button" data-lift="a" aria-pressed="false" id="liftBtnA"></button>
+        <button type="button" data-lift="b" aria-pressed="false" id="liftBtnB"></button>
+      </div>
+    </label>
+    <label class="field">
+      <span>Cardio (minutes)</span>
+      <input type="number" id="cardioMins" min="0" max="600" step="5" style="width:110px">
+    </label>
+  </div>
+  <div class="row" style="align-items:flex-end">
+    <label class="field">
+      <span>Other activity</span>
+      <input type="text" id="actName" placeholder="e.g. Tennis" style="width:160px">
+    </label>
+    <label class="field">
+      <span>Minutes</span>
+      <input type="number" id="actMins" min="0" max="600" step="5" style="width:90px">
+    </label>
+    <button id="actAdd">+ Add</button>
+  </div>
+  <div class="chips" id="actChips"></div>
+  <div class="row" style="margin-top:14px">
+    <button id="exerciseSave" class="primary">Save</button>
+  </div>
+  <div class="status" id="exerciseStatus" role="status" aria-live="polite"></div>
+</section>
+
+<!-- ── sleep logging ───────────────────────────────────────────────────── -->
+<section class="card" id="sleepCard">
   <div class="logzone">
     <div class="col">
       <h2>Bedtime</h2>
@@ -293,8 +416,8 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 
 <!-- ── goals ───────────────────────────────────────────────────────────── -->
 <section class="card">
-  <h2>Goals</h2>
-  <p class="sub">Both appear as reference lines on the charts below.</p>
+  <h2>Goals &amp; settings</h2>
+  <p class="sub">Sleep targets appear as reference lines on the charts below. Lift day names are yours to define.</p>
   <div class="row">
     <label class="field">
       <span>Target bedtime</span>
@@ -305,6 +428,16 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
       <input type="number" id="targetDeep" min="0" max="600" step="5" style="width:130px">
     </label>
     <span class="note" id="targetDeepHint" style="margin:0 0 8px 4px"></span>
+  </div>
+  <div class="row" style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border)">
+    <label class="field">
+      <span>Lift day A name</span>
+      <input type="text" id="liftLabelA" style="width:140px">
+    </label>
+    <label class="field">
+      <span>Lift day B name</span>
+      <input type="text" id="liftLabelB" style="width:140px">
+    </label>
   </div>
 </section>
 
@@ -330,6 +463,20 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 <!-- ── charts ──────────────────────────────────────────────────────────── -->
 <div id="chartsView">
   <section class="card">
+    <h2>Weight</h2>
+    <p class="sub">Body weight per day, in kg.</p>
+    <div class="legend" id="weightLegend"></div>
+    <div class="chartbox" id="weightChart"></div>
+  </section>
+
+  <section class="card">
+    <h2>Activity</h2>
+    <p class="sub">Aligned to the same dates as the weight chart above, to eyeball what coincides with what.</p>
+    <div class="strip-legend" id="stripLegend"></div>
+    <div class="stripbox" id="activityStrip"></div>
+  </section>
+
+  <section class="card">
     <h2>Bedtime</h2>
     <p class="sub" id="bedSubtitle">When you went to bed each night — higher is later.</p>
     <div class="legend" id="bedLegend"></div>
@@ -346,13 +493,17 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 
 <!-- ── table ───────────────────────────────────────────────────────────── -->
 <section class="card hidden" id="tableView">
-  <h2>All nights</h2>
-  <p class="sub">The same data as the charts. Edit or delete any night.</p>
+  <h2>All days</h2>
+  <p class="sub">The same data as the charts. Edit or delete any day.</p>
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
-          <th>Night of</th>
+          <th>Date</th>
+          <th>Weight</th>
+          <th>Lift</th>
+          <th>Cardio</th>
+          <th>Other</th>
           <th>Bedtime</th>
           <th>vs target</th>
           <th>Deep sleep</th>
@@ -411,7 +562,7 @@ const TREND_WINDOW = 7;
 
 /* Paste your own OAuth Client ID here to enable Google Drive sync.
    Get one from Google Cloud Console — full steps in README.md § "Google Drive sync". */
-const GOOGLE_CLIENT_ID = "503917254918-mndv1kpq7h3mb5e9quc1jdsoeasir38p.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const DRIVE_FILE_NAME = "sleep-tracker-data.json";
 const DRIVE_FILEID_KEY = "sleep-tracker-drive-file-id";
@@ -422,7 +573,15 @@ let rangeDays = 30;
 let showTable = false;
 
 function blank() {
-  return { version: 1, settings: { targetBedtime: "22:30", minDeepMinutes: 90 }, nights: {} };
+  return {
+    version: 2,
+    settings: {
+      targetBedtime: "22:30", minDeepMinutes: 90,
+      liftLabelA: "Day 1", liftLabelB: "Day 2",
+    },
+    nights: {},
+    days: {},
+  };
 }
 
 function load() {
@@ -432,9 +591,10 @@ function load() {
     const d = JSON.parse(raw);
     const base = blank();
     return {
-      version: 1,
+      version: 2,
       settings: Object.assign(base.settings, d.settings || {}),
       nights: d.nights && typeof d.nights === "object" ? d.nights : {},
+      days: d.days && typeof d.days === "object" ? d.days : {},
     };
   } catch (e) {
     console.warn("Could not read saved data, starting fresh.", e);
@@ -524,9 +684,17 @@ function addDays(s, n) {
 }
 
 /* ══ data shaping ═════════════════════════════════════════════════════════ */
-/** Every night in range, gaps included, oldest first. */
+/** Total minutes of "other" (non-cardio, non-lift) activity logged for a day. */
+function otherMinutes(day) {
+  const acts = (day && Array.isArray(day.activities)) ? day.activities : [];
+  return acts.reduce((a, x) => a + (Number(x.minutes) || 0), 0);
+}
+
+/** Every day in range, gaps included, oldest first. Merges sleep (keyed by
+    night-of) and weight/exercise (keyed by calendar day) onto one row per
+    date so charts can be stacked and eyeballed for correlation. */
 function seriesForRange() {
-  const keys = Object.keys(state.nights).sort();
+  const keys = Array.from(new Set([...Object.keys(state.nights), ...Object.keys(state.days)])).sort();
   if (!keys.length) return [];
 
   const today = nightOf(new Date());
@@ -542,6 +710,7 @@ function seriesForRange() {
   const out = [];
   for (let d = first; d <= last; d = addDays(d, 1)) {
     const n = state.nights[d] || {};
+    const day = state.days[d] || {};
     const bedMin = n.bedtime != null ? hmToMin(n.bedtime) : null;
     out.push({
       date: d,
@@ -549,10 +718,22 @@ function seriesForRange() {
       bedAxis: bedMin == null ? null : toAxis(bedMin),
       deep: typeof n.deepMinutes === "number" ? n.deepMinutes : null,
       source: n.source || null,
+      weight: typeof day.weightKg === "number" ? day.weightKg : null,
+      lift: day.lift || null,
+      cardio: typeof day.cardioMinutes === "number" ? day.cardioMinutes : null,
+      activities: Array.isArray(day.activities) ? day.activities : [],
+      otherMins: otherMinutes(day),
     });
     if (out.length > 3660) break; // hard stop against a runaway range
   }
   return out;
+}
+
+/** Most recent recorded weight strictly before (or on) `date`, for pre-filling
+    the input with "whatever it was last time" rather than a blank field. */
+function lastWeightBefore(date) {
+  const keys = Object.keys(state.days).filter((d) => d <= date && typeof state.days[d].weightKg === "number").sort();
+  return keys.length ? state.days[keys[keys.length - 1]].weightKg : null;
 }
 
 /** Trailing mean over the last `win` non-null values. */
@@ -641,6 +822,264 @@ function placeTip(tip, box, x, y) {
 
 function emptyState(box, msg) {
   box.innerHTML = `<div class="empty">${msg}</div>`;
+}
+
+/* ══ weight chart ═════════════════════════════════════════════════════════ */
+function renderWeight() {
+  const box = document.getElementById("weightChart");
+  const legend = document.getElementById("weightLegend");
+  const rows = seriesForRange();
+  const pts = rows.filter((r) => r.weight != null);
+
+  if (!pts.length) {
+    legend.innerHTML = "";
+    emptyState(box, "No weight logged yet — enter today's weight above.");
+    return;
+  }
+
+  const trend = rollingMean(rows, "weight", TREND_WINDOW);
+  const showTrend = trend.some((v) => v != null);
+
+  legend.innerHTML =
+    `<span class="item"><span class="swatch" style="background:var(--series-weight)"></span>Daily weight</span>` +
+    (showTrend ? `<span class="item"><span class="linekey" style="background:var(--trend)"></span>${TREND_WINDOW}-day average</span>` : "");
+
+  const W = Math.max(320, box.clientWidth || 640);
+  const M = { t: 16, r: 58, b: 30, l: 56 };
+  const plotW = W - M.l - M.r;
+  const H = Math.round(Math.min(320, Math.max(200, plotW * 0.42)));
+  const plotH = H - M.t - M.b;
+
+  let lo = Math.min(...pts.map((p) => p.weight));
+  let hi = Math.max(...pts.map((p) => p.weight));
+  const pad = Math.max(0.3, (hi - lo) * 0.15);
+  lo -= pad; hi += pad;
+  if (hi - lo < 1) { const c = (lo + hi) / 2; lo = c - 0.5; hi = c + 0.5; }
+
+  const n = rows.length;
+  const bandW = plotW / n;
+  const cx = (i) => M.l + bandW * (i + 0.5);
+  const cy = (v) => M.t + plotH * (1 - (v - lo) / (hi - lo));
+
+  box.innerHTML = "";
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img" });
+  svg.appendChild(el("title", {})).textContent = `Weight over the last ${n} days, in kilograms.`;
+
+  const wTicks = weightTicks(lo, hi);
+  for (const t of wTicks) {
+    const y = cy(t);
+    svg.appendChild(el("line", { x1: M.l, y1: y, x2: M.l + plotW, y2: y, stroke: "var(--grid)", "stroke-width": 1 }));
+    const lab = el("text", { x: M.l - 10, y: y + 4, "text-anchor": "end",
+      fill: "var(--text-muted)", "font-size": 11, "font-variant-numeric": "tabular-nums" });
+    lab.textContent = t.toFixed(1);
+    svg.appendChild(lab);
+  }
+  svg.appendChild(el("line", { x1: M.l, y1: M.t + plotH, x2: M.l + plotW, y2: M.t + plotH, stroke: "var(--axis)", "stroke-width": 1 }));
+
+  if (showTrend) {
+    let d = "", pen = false;
+    trend.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += (pen ? "L" : "M") + cx(i) + "," + cy(v);
+      pen = true;
+    });
+    svg.appendChild(el("path", { d, fill: "none", stroke: "var(--trend)", "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round", opacity: 0.55 }));
+  }
+
+  let d = "", pen = false;
+  rows.forEach((r, i) => {
+    if (r.weight == null) { pen = false; return; }
+    d += (pen ? "L" : "M") + cx(i) + "," + cy(r.weight);
+    pen = true;
+  });
+  svg.appendChild(el("path", { d, fill: "none", stroke: "var(--series-weight)", "stroke-width": 2,
+    "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+  rows.forEach((r, i) => {
+    if (r.weight == null) return;
+    svg.appendChild(el("circle", { cx: cx(i), cy: cy(r.weight), r: 4,
+      fill: "var(--series-weight)", stroke: "var(--surface-1)", "stroke-width": 2 }));
+  });
+
+  for (const i of xLabelIndices(n, plotW)) {
+    const lab = el("text", { x: cx(i), y: H - 10, "text-anchor": "middle", fill: "var(--text-muted)", "font-size": 11 });
+    lab.textContent = fmtDate(rows[i].date);
+    svg.appendChild(lab);
+  }
+
+  const lastI = rows.reduce((acc, r, i) => (r.weight != null ? i : acc), -1);
+  if (lastI >= 0) {
+    const lab = el("text", { x: Math.min(cx(lastI) + 9, M.l + plotW + M.r - 6), y: cy(rows[lastI].weight) - 9,
+      "text-anchor": "start", fill: "var(--text-primary)", "font-size": 11, "font-weight": 600 });
+    lab.textContent = rows[lastI].weight.toFixed(2);
+    svg.appendChild(lab);
+  }
+
+  const cross = el("line", { y1: M.t, y2: M.t + plotH, stroke: "var(--axis)", "stroke-width": 1, opacity: 0 });
+  svg.appendChild(cross);
+  box.appendChild(svg);
+  const tip = tooltipFor(box);
+  const hit = el("rect", { x: M.l, y: M.t, width: plotW, height: plotH, fill: "transparent" });
+  svg.appendChild(hit);
+
+  function showAt(i) {
+    const r = rows[i];
+    if (!r || r.weight == null) { hide(); return; }
+    cross.setAttribute("x1", cx(i)); cross.setAttribute("x2", cx(i)); cross.setAttribute("opacity", 1);
+    tip.innerHTML =
+      `<div class="tt-date">${fmtDate(r.date, true)}</div>` +
+      `<div class="tt-row"><span class="swatch" style="width:8px;height:8px;border-radius:2px;background:var(--series-weight)"></span>` +
+      `<span class="tt-val">${r.weight.toFixed(2)} kg</span></div>`;
+    tip.classList.add("on");
+    placeTip(tip, box, cx(i), cy(r.weight));
+  }
+  function hide() { cross.setAttribute("opacity", 0); tip.classList.remove("on"); }
+
+  const nearest = (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const scale = W / rect.width;
+    const px = (evt.clientX - rect.left) * scale;
+    return Math.max(0, Math.min(n - 1, Math.floor((px - M.l) / bandW)));
+  };
+  hit.addEventListener("pointermove", (e) => showAt(nearest(e)));
+  hit.addEventListener("pointerleave", hide);
+
+  svg.setAttribute("tabindex", "0");
+  let focusI = lastI;
+  svg.addEventListener("focus", () => showAt(focusI));
+  svg.addEventListener("blur", hide);
+  svg.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    let j = focusI;
+    for (let s = 0; s < n; s++) {
+      j += e.key === "ArrowLeft" ? -1 : 1;
+      if (j < 0 || j >= n) return;
+      if (rows[j].weight != null) { focusI = j; showAt(j); return; }
+    }
+  });
+}
+
+/** Weight-axis ticks on 0.5/1/2/5 kg steps, whatever the span calls for. */
+function weightTicks(lo, hi) {
+  const span = hi - lo;
+  const step = span <= 3 ? 0.5 : span <= 6 ? 1 : span <= 15 ? 2 : 5;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return out;
+}
+
+/* ══ activity strip ═══════════════════════════════════════════════════════ */
+function renderActivityStrip() {
+  const box = document.getElementById("activityStrip");
+  const legend = document.getElementById("stripLegend");
+  const rows = seriesForRange();
+  const any = rows.some((r) => r.lift || r.cardio != null || r.otherMins > 0);
+
+  legend.innerHTML =
+    `<span class="item"><span class="sq">${liftInitial("a")}</span>${state.settings.liftLabelA}</span>` +
+    `<span class="item"><span class="sq">${liftInitial("b")}</span>${state.settings.liftLabelB}</span>` +
+    `<span class="item"><span class="swatch" style="background:var(--series-weight);opacity:.55"></span>Cardio</span>` +
+    `<span class="item"><span class="swatch" style="background:var(--series-weight);opacity:.95"></span>Other activity</span>`;
+
+  if (!any) {
+    emptyState(box, "No exercise logged yet — log a lift day, cardio, or another activity above.");
+    return;
+  }
+
+  const W = Math.max(320, box.clientWidth || 640);
+  const M = { t: 4, r: 58, b: 22, l: 56 };
+  const plotW = W - M.l - M.r;
+  const rowH = 22, rowGap = 4;
+  const rowY = { lift: M.t, cardio: M.t + rowH + rowGap, other: M.t + (rowH + rowGap) * 2 };
+  const H = rowY.other + rowH + M.b;
+
+  const n = rows.length;
+  const bandW = plotW / n;
+  const cx = (i) => M.l + bandW * (i + 0.5);
+  const barW = Math.max(2, Math.min(22, bandW - 3));
+
+  const maxCardio = Math.max(30, ...rows.map((r) => r.cardio || 0));
+  const maxOther = Math.max(30, ...rows.map((r) => r.otherMins || 0));
+
+  box.innerHTML = "";
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img" });
+  svg.appendChild(el("title", {})).textContent = `Exercise logged over the last ${n} days.`;
+
+  const rowLabel = (y, text) => {
+    const lab = el("text", { x: M.l - 10, y: y + rowH / 2 + 4, "text-anchor": "end", fill: "var(--text-muted)", "font-size": 11 });
+    lab.textContent = text;
+    svg.appendChild(lab);
+  };
+  rowLabel(rowY.lift, "Lift");
+  rowLabel(rowY.cardio, "Cardio");
+  rowLabel(rowY.other, "Other");
+
+  rows.forEach((r, i) => {
+    if (!r.lift) return;
+    const y = rowY.lift + (rowH - 16) / 2;
+    svg.appendChild(el("rect", { x: cx(i) - 8, y, width: 16, height: 16, rx: 4,
+      fill: "var(--text-secondary)" }));
+    const t = el("text", { x: cx(i), y: y + 11.5, "text-anchor": "middle", fill: "var(--surface-1)", "font-size": 9, "font-weight": 700 });
+    t.textContent = liftInitial(r.lift);
+    svg.appendChild(t);
+  });
+
+  rows.forEach((r, i) => {
+    if (!r.cardio) return;
+    const h = Math.max(3, (r.cardio / maxCardio) * rowH);
+    svg.appendChild(el("path", { d: barPath(cx(i) - barW / 2, rowY.cardio + rowH - h, barW, h, 3),
+      fill: "var(--series-weight)", opacity: 0.55 }));
+  });
+
+  rows.forEach((r, i) => {
+    if (!r.otherMins) return;
+    const h = Math.max(3, (r.otherMins / maxOther) * rowH);
+    svg.appendChild(el("path", { d: barPath(cx(i) - barW / 2, rowY.other + rowH - h, barW, h, 3),
+      fill: "var(--series-weight)", opacity: 0.95 }));
+  });
+
+  for (const i of xLabelIndices(n, plotW)) {
+    const lab = el("text", { x: cx(i), y: H - 6, "text-anchor": "middle", fill: "var(--text-muted)", "font-size": 11 });
+    lab.textContent = fmtDate(rows[i].date);
+    svg.appendChild(lab);
+  }
+
+  box.appendChild(svg);
+  const tip = tooltipFor(box);
+  const hit = el("rect", { x: M.l, y: M.t, width: plotW, height: rowY.other + rowH - M.t, fill: "transparent" });
+  svg.appendChild(hit);
+
+  function showAt(i) {
+    const r = rows[i];
+    if (!r || (!r.lift && !r.cardio && !r.otherMins)) { tip.classList.remove("on"); return; }
+    const liftText = r.lift ? (r.lift === "a" ? state.settings.liftLabelA : state.settings.liftLabelB) : null;
+    const otherText = r.activities.length ? r.activities.map((a) => `${a.name} ${a.minutes}m`).join(", ") : null;
+    tip.innerHTML =
+      `<div class="tt-date">${fmtDate(r.date, true)}</div>` +
+      (liftText ? `<div class="tt-row">🏋️ ${liftText}</div>` : "") +
+      (r.cardio ? `<div class="tt-row">🏃 Cardio ${fmtDuration(r.cardio)}</div>` : "") +
+      (otherText ? `<div class="tt-row">${otherText}</div>` : "");
+    tip.classList.add("on");
+    placeTip(tip, box, cx(i), rowY.lift);
+  }
+
+  const nearest = (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const scale = W / rect.width;
+    const px = (evt.clientX - rect.left) * scale;
+    return Math.max(0, Math.min(n - 1, Math.floor((px - M.l) / bandW)));
+  };
+  hit.addEventListener("pointermove", (e) => showAt(nearest(e)));
+  hit.addEventListener("pointerleave", () => tip.classList.remove("on"));
+}
+
+/* Always "1"/"2" — a positional marker for the square, not derived from the
+   (often shared-prefix, e.g. "Day 1"/"Day 2") label text. The full label is
+   what appears in the legend and tooltip right next to it. */
+function liftInitial(lift) {
+  return lift === "a" ? "1" : "2";
 }
 
 /* ══ bedtime chart ════════════════════════════════════════════════════════ */
@@ -990,6 +1429,37 @@ function renderKpis() {
     `<div class="value">${t.value}</div>` +
     (t.delta ? `<div class="delta">${t.delta}</div>` : "") + `</div>`
   ).join("");
+
+  renderWeightExerciseKpis(rows, label);
+}
+
+function renderWeightExerciseKpis(rows, label) {
+  const weights = rows.filter((r) => r.weight != null);
+  const curWeight = weights.length ? weights[weights.length - 1].weight : null;
+  const firstWeight = weights.length ? weights[0].weight : null;
+  const weightDelta = curWeight != null && firstWeight != null ? curWeight - firstWeight : null;
+
+  const liftDays = rows.filter((r) => r.lift).length;
+  const cardioTotal = rows.reduce((a, r) => a + (r.cardio || 0), 0);
+  const otherTotal = rows.reduce((a, r) => a + (r.otherMins || 0), 0);
+
+  const tiles = [
+    { label: "Current weight", value: curWeight == null ? "—" : `${curWeight.toFixed(2)} kg`,
+      delta: weightDelta == null ? "" : weightDelta === 0 ? `unchanged over ${label}` :
+        (weightDelta < 0
+          ? `<span class="up">▼ ${Math.abs(weightDelta).toFixed(2)} kg</span>`
+          : `<span class="down">▲ ${weightDelta.toFixed(2)} kg</span>`) + ` over ${label}` },
+    { label: `Lift days · ${label}`, value: liftDays ? String(liftDays) : "—",
+      delta: liftDays ? `of ${rows.length} days in range` : "" },
+    { label: `Cardio · ${label}`, value: cardioTotal ? fmtDuration(cardioTotal) : "—", delta: "" },
+    { label: `Other activity · ${label}`, value: otherTotal ? fmtDuration(otherTotal) : "—", delta: "" },
+  ];
+
+  document.getElementById("kpis").insertAdjacentHTML("beforeend", tiles.map((t) =>
+    `<div class="tile"><div class="label">${t.label}</div>` +
+    `<div class="value">${t.value}</div>` +
+    (t.delta ? `<div class="delta">${t.delta}</div>` : "") + `</div>`
+  ).join(""));
 }
 
 function deltaVsTarget(avgAxis, targetAxis) {
@@ -1006,10 +1476,10 @@ function renderTable() {
   const rows = seriesForRange().slice().reverse();
   const targetAxis = toAxis(hmToMin(state.settings.targetBedtime) ?? 0);
   const minDeep = state.settings.minDeepMinutes;
-  const withData = rows.filter((r) => r.bedAxis != null || r.deep != null);
+  const withData = rows.filter((r) => r.bedAxis != null || r.deep != null || r.weight != null || r.lift || r.cardio != null || r.otherMins);
 
   if (!withData.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-secondary);padding:24px 10px">No nights recorded yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="color:var(--text-secondary);padding:24px 10px">No days recorded yet.</td></tr>`;
     return;
   }
 
@@ -1029,8 +1499,14 @@ function renderTable() {
         ? `<span class="pill met"><span class="dot" style="background:var(--good)"></span>${d === 0 ? "at minimum" : fmtDuration(d) + " over"}</span>`
         : `<span class="pill miss"><span class="dot" style="background:var(--critical)"></span>${fmtDuration(-d)} under</span>`;
     }
+    const liftCell = r.lift ? (r.lift === "a" ? state.settings.liftLabelA : state.settings.liftLabelB) : "—";
+    const otherCell = r.activities.length ? r.activities.map((a) => `${a.name} ${a.minutes}m`).join(", ") : "—";
     return `<tr data-date="${r.date}">
       <td>${fmtDate(r.date, true)}</td>
+      <td class="num js-weight">${r.weight == null ? "—" : r.weight.toFixed(2) + " kg"}</td>
+      <td class="js-lift">${liftCell}</td>
+      <td class="num js-cardio">${r.cardio == null ? "—" : fmtDuration(r.cardio)}</td>
+      <td class="js-other">${otherCell}</td>
       <td class="num js-bed">${bedCell}</td>
       <td>${bedFlag}</td>
       <td class="num js-deep">${r.deep == null ? "—" : fmtDuration(r.deep)}</td>
@@ -1047,8 +1523,9 @@ document.getElementById("tbody").addEventListener("click", (e) => {
   const date = tr.dataset.date;
 
   if (e.target.classList.contains("js-del")) {
-    if (!confirm(`Delete the night of ${fmtDate(date, true)}?`)) return;
+    if (!confirm(`Delete every record for ${fmtDate(date, true)} (sleep, weight, exercise)?`)) return;
     delete state.nights[date];
+    delete state.days[date];
     save();
     renderAll();
     return;
@@ -1056,6 +1533,15 @@ document.getElementById("tbody").addEventListener("click", (e) => {
 
   if (e.target.classList.contains("js-edit")) {
     const n = state.nights[date] || {};
+    const day = state.days[date] || {};
+    tr.querySelector(".js-weight").innerHTML =
+      `<input type="number" class="e-weight" min="0" max="400" step="0.01" style="width:76px" value="${day.weightKg ?? ""}">`;
+    tr.querySelector(".js-lift").innerHTML =
+      `<select class="e-lift"><option value="">—</option>` +
+      `<option value="a"${day.lift === "a" ? " selected" : ""}>${state.settings.liftLabelA}</option>` +
+      `<option value="b"${day.lift === "b" ? " selected" : ""}>${state.settings.liftLabelB}</option></select>`;
+    tr.querySelector(".js-cardio").innerHTML =
+      `<input type="number" class="e-cardio" min="0" max="600" step="5" style="width:70px" value="${day.cardioMinutes ?? ""}">`;
     tr.querySelector(".js-bed").innerHTML = `<input type="time" class="e-bed" value="${n.bedtime || ""}">`;
     tr.querySelector(".js-deep").innerHTML =
       `<input type="number" class="e-deep" min="0" max="600" step="1" value="${n.deepMinutes ?? ""}">`;
@@ -1066,13 +1552,29 @@ document.getElementById("tbody").addEventListener("click", (e) => {
   if (e.target.classList.contains("js-save")) {
     const bed = tr.querySelector(".e-bed").value;
     const deepRaw = tr.querySelector(".e-deep").value;
-    const rec = state.nights[date] || {};
-    if (bed) rec.bedtime = bed; else delete rec.bedtime;
+    const nrec = state.nights[date] || {};
+    if (bed) nrec.bedtime = bed; else delete nrec.bedtime;
     const dv = deepRaw === "" ? null : Number(deepRaw);
-    if (dv != null && Number.isFinite(dv) && dv >= 0) rec.deepMinutes = Math.round(dv);
-    else delete rec.deepMinutes;
-    if (rec.bedtime == null && rec.deepMinutes == null) delete state.nights[date];
-    else { rec.source = "manual"; state.nights[date] = rec; }
+    if (dv != null && Number.isFinite(dv) && dv >= 0) nrec.deepMinutes = Math.round(dv);
+    else delete nrec.deepMinutes;
+    if (nrec.bedtime == null && nrec.deepMinutes == null) delete state.nights[date];
+    else { nrec.source = nrec.source || "manual"; state.nights[date] = nrec; }
+
+    const weightRaw = tr.querySelector(".e-weight").value;
+    const liftVal = tr.querySelector(".e-lift").value;
+    const cardioRaw = tr.querySelector(".e-cardio").value;
+    const drec = state.days[date] || {};
+    const wv = weightRaw === "" ? null : Number(weightRaw);
+    if (wv != null && Number.isFinite(wv) && wv > 0) drec.weightKg = Math.round(wv * 100) / 100;
+    else delete drec.weightKg;
+    if (liftVal === "a" || liftVal === "b") drec.lift = liftVal; else delete drec.lift;
+    const cv = cardioRaw === "" ? null : Number(cardioRaw);
+    if (cv != null && Number.isFinite(cv) && cv >= 0) drec.cardioMinutes = Math.round(cv);
+    else delete drec.cardioMinutes;
+    if (drec.weightKg == null && drec.lift == null && drec.cardioMinutes == null && !(drec.activities && drec.activities.length))
+      delete state.days[date];
+    else state.days[date] = drec;
+
     save();
     renderAll();
   }
@@ -1083,7 +1585,7 @@ function renderAll() {
   TOK = null;
   renderKpis();
   if (showTable) renderTable();
-  else { renderBedtime(); renderDeep(); }
+  else { renderWeight(); renderActivityStrip(); renderBedtime(); renderDeep(); }
   refreshLogHint();
 }
 
@@ -1145,6 +1647,163 @@ document.getElementById("deepSave").addEventListener("click", () => {
   setStatus("deepStatus", `Saved ${fmtDuration(Math.round(v))} for the night of ${fmtDate(date, true)}.`, "ok");
 });
 
+/* ── weight actions ────────────────────────────────────────────────────── */
+function roundKg(v) { return Math.round(v * 100) / 100; }
+
+function fillWeightForDate(date) {
+  const rec = state.days[date];
+  const val = rec && typeof rec.weightKg === "number" ? rec.weightKg : lastWeightBefore(addDays(date, -1));
+  document.getElementById("weightVal").value = val == null ? "" : val.toFixed(2);
+}
+
+document.getElementById("weightDate").addEventListener("change", (e) => fillWeightForDate(e.target.value));
+
+document.querySelectorAll(".wstep").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const input = document.getElementById("weightVal");
+    const cur = Number(input.value) || 0;
+    input.value = roundKg(cur + Number(btn.dataset.step)).toFixed(2);
+  });
+});
+
+/* Wheel: one notch = 0.05kg, hold Shift for 0.5kg. */
+document.getElementById("weightVal").addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const input = e.currentTarget;
+  const cur = Number(input.value) || 0;
+  const step = e.shiftKey ? 0.5 : 0.05;
+  input.value = roundKg(cur + (e.deltaY < 0 ? step : -step)).toFixed(2);
+}, { passive: false });
+
+/* Vertical drag: also nudges the value, for touch devices with no wheel.
+   A drag is only recognised once the pointer has moved a few px, so a plain
+   tap still focuses the field for typing. */
+(function setupWeightDrag() {
+  const input = document.getElementById("weightVal");
+  let dragging = false, startY = 0, startVal = 0, moved = false;
+  input.addEventListener("pointerdown", (e) => {
+    startY = e.clientY;
+    startVal = Number(input.value) || 0;
+    moved = false;
+    dragging = true;
+    input.setPointerCapture(e.pointerId);
+  });
+  input.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    if (!moved && Math.abs(dy) < 4) return;
+    moved = true;
+    input.blur();
+    e.preventDefault();
+    input.value = roundKg(startVal + Math.round(dy / 8) * 0.05).toFixed(2);
+  });
+  const end = () => { dragging = false; };
+  input.addEventListener("pointerup", end);
+  input.addEventListener("pointercancel", end);
+  input.addEventListener("click", (e) => { if (moved) e.preventDefault(); });
+})();
+
+document.getElementById("weightSave").addEventListener("click", () => {
+  const date = document.getElementById("weightDate").value;
+  const raw = document.getElementById("weightVal").value;
+  if (!date) { setStatus("weightStatus", "Pick the date this belongs to.", "err"); return; }
+  const v = Number(raw);
+  if (raw === "" || !Number.isFinite(v) || v <= 0) { setStatus("weightStatus", "Enter a weight in kg.", "err"); return; }
+  const rec = state.days[date] || {};
+  rec.weightKg = roundKg(v);
+  state.days[date] = rec;
+  save();
+  renderAll();
+  setStatus("weightStatus", `Saved ${roundKg(v).toFixed(2)} kg for ${fmtDate(date, true)}.`, "ok");
+});
+
+/* ── exercise actions ─────────────────────────────────────────────────── */
+let pendingActivities = [];
+let liftSelection = null;
+
+function renderChips() {
+  const box = document.getElementById("actChips");
+  box.innerHTML = pendingActivities.map((a, i) =>
+    `<span class="chip">${a.name} · ${a.minutes}m<button type="button" data-i="${i}" class="js-chip-del">✕</button></span>`
+  ).join("");
+}
+document.getElementById("actChips").addEventListener("click", (e) => {
+  const btn = e.target.closest(".js-chip-del");
+  if (!btn) return;
+  pendingActivities.splice(Number(btn.dataset.i), 1);
+  renderChips();
+});
+
+document.getElementById("actAdd").addEventListener("click", () => {
+  const name = document.getElementById("actName").value.trim();
+  const mins = Number(document.getElementById("actMins").value);
+  if (!name || !Number.isFinite(mins) || mins <= 0) { setStatus("exerciseStatus", "Enter an activity name and minutes.", "err"); return; }
+  pendingActivities.push({ name, minutes: Math.round(mins) });
+  document.getElementById("actName").value = "";
+  document.getElementById("actMins").value = "";
+  renderChips();
+  setStatus("exerciseStatus", "", "");
+});
+
+function setLiftUI() {
+  document.getElementById("liftBtnA").setAttribute("aria-pressed", String(liftSelection === "a"));
+  document.getElementById("liftBtnB").setAttribute("aria-pressed", String(liftSelection === "b"));
+}
+document.getElementById("liftToggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-lift]");
+  if (!btn) return;
+  const val = btn.dataset.lift;
+  liftSelection = liftSelection === val ? null : val;
+  setLiftUI();
+});
+
+function fillExerciseForDate(date) {
+  const rec = state.days[date] || {};
+  liftSelection = rec.lift || null;
+  setLiftUI();
+  document.getElementById("cardioMins").value = rec.cardioMinutes ?? "";
+  pendingActivities = Array.isArray(rec.activities) ? rec.activities.map((a) => ({ name: a.name, minutes: a.minutes })) : [];
+  renderChips();
+}
+document.getElementById("exerciseDate").addEventListener("change", (e) => fillExerciseForDate(e.target.value));
+
+document.getElementById("exerciseSave").addEventListener("click", () => {
+  const date = document.getElementById("exerciseDate").value;
+  if (!date) { setStatus("exerciseStatus", "Pick the date this belongs to.", "err"); return; }
+  const cardioRaw = document.getElementById("cardioMins").value;
+  const cardio = cardioRaw === "" ? null : Number(cardioRaw);
+  const rec = state.days[date] || {};
+  if (liftSelection) rec.lift = liftSelection; else delete rec.lift;
+  if (cardio != null && Number.isFinite(cardio) && cardio >= 0) rec.cardioMinutes = Math.round(cardio);
+  else delete rec.cardioMinutes;
+  if (pendingActivities.length) rec.activities = pendingActivities.slice();
+  else delete rec.activities;
+  if (rec.lift == null && rec.cardioMinutes == null && !(rec.activities && rec.activities.length) && rec.weightKg == null)
+    delete state.days[date];
+  else state.days[date] = rec;
+  save();
+  renderAll();
+  setStatus("exerciseStatus", `Saved exercise for ${fmtDate(date, true)}.`, "ok");
+});
+
+/* ── lift day label settings ──────────────────────────────────────────── */
+document.getElementById("liftLabelA").addEventListener("change", (e) => {
+  state.settings.liftLabelA = e.target.value.trim() || "Day 1";
+  syncLiftLabelButtons();
+  save();
+  renderAll();
+});
+document.getElementById("liftLabelB").addEventListener("change", (e) => {
+  state.settings.liftLabelB = e.target.value.trim() || "Day 2";
+  syncLiftLabelButtons();
+  save();
+  renderAll();
+});
+function syncLiftLabelButtons() {
+  document.getElementById("liftBtnA").textContent = state.settings.liftLabelA;
+  document.getElementById("liftBtnB").textContent = state.settings.liftLabelB;
+}
+
 document.getElementById("targetBed").addEventListener("change", (e) => {
   if (hmToMin(e.target.value) == null) return;
   state.settings.targetBedtime = e.target.value;
@@ -1203,10 +1862,10 @@ document.getElementById("exportBtn").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `sleep-data-${ymd(new Date())}.json`;
+  a.download = `health-data-${ymd(new Date())}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  setStatus("dataStatus", `Exported ${Object.keys(state.nights).length} nights.`, "ok");
+  setStatus("dataStatus", `Exported ${Object.keys(state.nights).length} nights, ${Object.keys(state.days).length} days of weight/exercise.`, "ok");
 });
 
 document.getElementById("importBtn").addEventListener("click", () => document.getElementById("jsonFile").click());
@@ -1215,18 +1874,26 @@ document.getElementById("jsonFile").addEventListener("change", async (e) => {
   if (!f) return;
   try {
     const d = JSON.parse(await f.text());
-    if (!d || typeof d.nights !== "object") throw new Error("not a sleep-tracker backup");
+    if (!d || (typeof d.nights !== "object" && typeof d.days !== "object")) throw new Error("not a health-tracker backup");
     let added = 0, updated = 0;
-    for (const [date, rec] of Object.entries(d.nights)) {
+    for (const [date, rec] of Object.entries(d.nights || {})) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       if (state.nights[date]) updated++; else added++;
       state.nights[date] = Object.assign({}, state.nights[date], rec);
+    }
+    let daysAdded = 0, daysUpdated = 0;
+    for (const [date, rec] of Object.entries(d.days || {})) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (state.days[date]) daysUpdated++; else daysAdded++;
+      state.days[date] = Object.assign({}, state.days[date], rec);
     }
     if (d.settings) Object.assign(state.settings, d.settings);
     save();
     syncInputs();
     renderAll();
-    setStatus("dataStatus", `Imported — ${added} new night${added === 1 ? "" : "s"}, ${updated} updated.`, "ok");
+    setStatus("dataStatus",
+      `Imported — ${added} new night${added === 1 ? "" : "s"}, ${updated} updated; ` +
+      `${daysAdded} new day${daysAdded === 1 ? "" : "s"} of weight/exercise, ${daysUpdated} updated.`, "ok");
   } catch (err) {
     setStatus("dataStatus", "Could not read that file: " + err.message, "err");
   }
@@ -1234,7 +1901,7 @@ document.getElementById("jsonFile").addEventListener("change", async (e) => {
 });
 
 document.getElementById("wipeBtn").addEventListener("click", () => {
-  if (!confirm("Delete every night and reset your goals? Export a backup first if you want to keep it.")) return;
+  if (!confirm("Delete every night, weight/exercise day, and reset your goals? Export a backup first if you want to keep it.")) return;
   state = blank();
   save();
   syncInputs();
@@ -1547,10 +2214,14 @@ async function driveMergeAndPush() {
   if (!fileId) fileId = await driveFind();
   if (fileId) {
     const remote = await driveDownload(fileId).catch(() => null);
-    if (remote && typeof remote.nights === "object") {
-      for (const [date, rec] of Object.entries(remote.nights)) {
+    if (remote && (typeof remote.nights === "object" || typeof remote.days === "object")) {
+      for (const [date, rec] of Object.entries(remote.nights || {})) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
         state.nights[date] = Object.assign({}, rec, state.nights[date]);
+      }
+      for (const [date, rec] of Object.entries(remote.days || {})) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+        state.days[date] = Object.assign({}, rec, state.days[date]);
       }
       if (remote.settings) state.settings = Object.assign({}, remote.settings, state.settings);
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
@@ -1635,6 +2306,16 @@ function syncInputs() {
   const rec = state.nights[tonight];
   document.getElementById("bedTime").value = (rec && rec.bedtime) || state.settings.targetBedtime;
   syncGoalHint();
+
+  document.getElementById("liftLabelA").value = state.settings.liftLabelA;
+  document.getElementById("liftLabelB").value = state.settings.liftLabelB;
+  syncLiftLabelButtons();
+
+  const today = ymd(new Date());
+  document.getElementById("weightDate").value = today;
+  fillWeightForDate(today);
+  document.getElementById("exerciseDate").value = today;
+  fillExerciseForDate(today);
 }
 
 applyTheme(localStorage.getItem(THEME_KEY) || "");

@@ -1,21 +1,71 @@
-# Sleep Tracker
+# Health Tracker
 
-A single-file web app for tracking **when you go to bed** and **how much deep sleep
-you get**, against two goals you set yourself. No build step, no dependencies, no
-server — `index.html` is the whole application.
+A single-file web app for tracking **sleep** (bedtime + deep sleep), **weight**,
+and **exercise** (weightlifting day, cardio, other activities) — all in one place,
+so you can eyeball whether they move together. No build step, no dependencies, no
+server — `index.html` is the whole application. (The repo/file are still named
+`sleep-tracker`; rename them if you like, it's cosmetic.)
 
 ## What it does
 
+**Sleep**
 - **One-button bedtime logging.** Press *Log bedtime now* and it stamps the current
   time against tonight. A timestamp after midnight is filed under the previous
   night, so a 12:40am bedtime counts toward the night it belongs to.
 - **Deep sleep**, either imported from Apple Watch or typed in by hand.
 - **Two adjustable goals** — a target bedtime (default 22:30) and a minimum deep
   sleep (default 90 min) — drawn as dashed reference lines on both charts.
-- **Progression at a glance:** nightly values plus a 7-night rolling average, so
-  you read the trend rather than last night's noise.
-- Stat tiles for average bedtime, nights on target, average deep sleep, and your
-  current streak; a table view with inline editing; light and dark themes.
+
+**Weight**
+- One number per day, in kg to 2 decimals. The field pre-fills with your most
+  recent entry, and you adjust it three ways: type an exact value, click the
+  `−1 / −.1 / +.1 / +1` stepper buttons, or **scroll the mouse wheel / drag up-down
+  on the number itself** (hold Shift while scrolling for 0.5kg jumps). A drag has
+  to move a few pixels before it "takes over" from a tap, so tapping to type still
+  works on touch screens.
+
+**Exercise**
+- **Weightlifting**: a two-way toggle for whichever day-split you use (default
+  "Day 1" / "Day 2" — rename them in *Goals & settings*, e.g. "Push" / "Pull" or
+  "Upper" / "Lower").
+- **Cardio**: minutes for the day.
+- **Other activity**: a name + minutes, add as many as you did that day (e.g.
+  "Tennis 60m" and "Walk 20m" on the same date) — shown as removable chips before
+  you save.
+
+**Across all three**
+- **Progression at a glance:** nightly/daily values plus a 7-day rolling average
+  on the weight and sleep charts, so you read the trend rather than one noisy day.
+- **The Weight chart and the Activity strip below it share the same date axis**,
+  specifically so you can scan down a given day and see whether a lift day, cardio,
+  or another activity lines up with a change in weight or sleep — see "Looking for
+  correlation" below.
+- Stat tiles for both sleep (average bedtime, nights on target, average deep sleep,
+  streak) and weight/exercise (current weight, change over the range, lift days,
+  cardio + other-activity totals); a table view with inline editing; light and
+  dark themes.
+
+## Looking for correlation between sleep, exercise, and weight
+
+The Weight chart, the Activity strip (Lift / Cardio / Other, one column per day),
+the Bedtime chart, and the Deep sleep chart are stacked in that order and all
+share the exact same date range and day-to-day alignment. There's deliberately no
+overlaid dual-axis chart — plotting weight and deep sleep on one shared axis would
+visually imply a correlation coefficient the data doesn't actually contain — but
+because every chart lines up on the same x-axis, you can scan straight down a
+date and see, at a glance, "logged a lift day here, and slept longer that night,
+and weight ticked down two days later." That's the intended way to read it.
+
+Food/calorie intake isn't tracked here (tracked separately, per your own setup) —
+adding it later would slot in the same way, as one more chart aligned to this axis.
+
+### About the "deep sleep integration" question
+
+Since sleep, weight, and exercise now live in the *same* app and the same Drive
+file, this is handled for free — there's no separate sync to wire up. (If you'd
+rather keep them as two separate apps for some reason, it's still possible via
+Google's file picker and the same `drive.file` scope, but it's extra plumbing for
+no real benefit once they're merged like this.)
 
 ## Hosting it on GitHub Pages
 
@@ -134,17 +184,19 @@ above first** — you need that live URL for step 3 below.
 
 In the app's **Your data** card, click **Connect Google Drive**. The first time,
 Google shows a warning that the app is unverified — that's expected for a personal
-app in Testing mode; click **Advanced → Go to Sleep Tracker (unsafe)** — "unsafe"
-here just means Google hasn't manually reviewed it, not that anything is actually
-wrong. Approve the `drive.file` permission. It creates
-`sleep-tracker-data.json` in your My Drive and syncs to it from then on; open the
+app in Testing mode; click **Advanced → Go to \<your app name\> (unsafe)** (whatever
+you named it in step 1) — "unsafe" here just means Google hasn't manually reviewed
+it, not that anything is actually wrong. Approve the `drive.file` permission. It
+creates `sleep-tracker-data.json` in your My Drive — one file for sleep, weight,
+and exercise together — and syncs to it from then on; open the
 same URL on another device (signed into the same Google account) and click Connect
 there too — it downloads that file and merges it with whatever's already local.
 
 **How the sync works, and its limits:** it's one JSON file, updated a couple of
-seconds after any change, and each night's entry merges field-by-field rather than
-overwriting wholesale. It is *not* real-time — two devices editing the exact same
-night within the same few seconds can have one edit win over the other. For one
+seconds after any change, and each night's or day's entry merges field-by-field
+rather than overwriting wholesale. It is *not* real-time — two devices editing the
+exact same night or day within the same few seconds can have one edit win over the
+other. For one
 person's own devices this is more than good enough; it is not built for multiple
 people editing concurrently.
 
@@ -156,35 +208,57 @@ the current browser session; it doesn't touch the Drive file or the permission g
 
 ```json
 {
-  "version": 1,
-  "settings": { "targetBedtime": "22:30", "minDeepMinutes": 90 },
+  "version": 2,
+  "settings": {
+    "targetBedtime": "22:30", "minDeepMinutes": 90,
+    "liftLabelA": "Day 1", "liftLabelB": "Day 2"
+  },
   "nights": {
     "2026-08-02": { "bedtime": "23:09", "deepMinutes": 117, "source": "apple" }
+  },
+  "days": {
+    "2026-08-02": {
+      "weightKg": 72.35,
+      "lift": "a",
+      "cardioMinutes": 30,
+      "activities": [{ "name": "Tennis", "minutes": 60 }]
+    }
   }
 }
 ```
 
-`bedtime` is a local wall-clock `HH:MM`; the key is the *night of* date. Everything
-is plain and hand-editable.
+`nights` is keyed by the *night of* date (a bedtime after midnight files under the
+previous night); `days` is keyed by the calendar date you logged weight/exercise
+against. `lift` is `"a"` or `"b"`, matching whichever of `liftLabelA` / `liftLabelB`
+you did that day; omit the field (or leave it out entirely) for a rest day.
+Everything is plain and hand-editable.
 
 ## Notes on the charts
 
 Bedtime is plotted on an axis anchored at 18:00, so times either side of midnight
-stay in order instead of jumping from 23:59 to 00:00. Bedtime and deep sleep are
-deliberately two separate charts on two separate axes — overlaying them on a shared
-plot with two y-scales would imply a correlation the data doesn't contain.
+stay in order instead of jumping from 23:59 to 00:00. Every chart section — Weight,
+Activity, Bedtime, Deep sleep — is its own single-series plot on its own axis
+rather than one shared multi-axis chart; overlaying series with different units on
+one plot would visually imply a correlation the data doesn't actually contain.
+What they *do* share is the date range and per-day horizontal alignment, so you
+can still read across them — see "Looking for correlation" above.
 
-The two series colors are checked against the colorblind-separation, lightness,
+The chart colors are checked against the colorblind-separation, lightness,
 chroma, and contrast gates:
 
 ```
-python tools/validate_palette.py "#2a78d6,#1baf7a" --mode light --pairs all
-python tools/validate_palette.py "#3987e5,#199e70" --mode dark  --pairs all
+python tools/validate_palette.py "#2a78d6,#1baf7a,#e0a30e" --mode light --pairs all
+python tools/validate_palette.py "#3987e5,#199e70,#bb7e12" --mode dark  --pairs all
 ```
 
-Both pass in both themes. Re-run it if you change the colors — several
-plausible-looking pairs (blue + violet, for one) collapse to near-identical under
-red-green colorblindness in dark mode.
+Both pass in both themes (bed = blue, deep sleep = green, weight = amber). The
+Activity strip deliberately doesn't add more hues on top of that: the lift-day
+squares use plain ink with a "1"/"2" digit inside (not color) to tell the two days
+apart, and the cardio/other-activity bars reuse the weight amber at two different
+opacities, distinguished by their row label rather than a new color. Re-run the
+validator if you change any of the three chart colors — several plausible-looking
+combinations (blue + violet, for one) collapse to near-identical under red-green
+colorblindness, especially in dark mode.
 
 `tools/make_preview.py` builds a copy of the app seeded with 45 nights of sample
 data, for eyeballing layout changes without touching your real history:
