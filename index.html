@@ -562,7 +562,7 @@ const TREND_WINDOW = 7;
 
 /* Paste your own OAuth Client ID here to enable Google Drive sync.
    Get one from Google Cloud Console — full steps in README.md § "Google Drive sync". */
-const GOOGLE_CLIENT_ID = "71137289288-inqsll4t46ct307it3tv91nfj02p5bqe.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const DRIVE_FILE_NAME = "sleep-tracker-data.json";
 const DRIVE_FILEID_KEY = "sleep-tracker-drive-file-id";
@@ -2179,18 +2179,34 @@ async function driveDownload(fileId) {
   return r.json();
 }
 
-async function driveUpload(fileId, data) {
+async function driveUpload(fileId, data, _retried) {
   const body = JSON.stringify(data, null, 2);
   if (fileId) {
-    await driveApi(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { Authorization: "Bearer " + gAccessToken, "Content-Type": "application/json" },
       body,
     });
-    return fileId;
+    if (r.ok) return fileId;
+    if (r.status === 401) {
+      gAccessToken = null;
+      driveSetConnectedUI(false);
+      throw new Error("Drive session expired — click Connect Google Drive again.");
+    }
+    if (r.status === 404 && !_retried) {
+      // The cached file id no longer exists on Drive (deleted, or this is a
+      // different Google account than the one that created it). Forget it
+      // and look the file up by name instead of retrying the same dead id
+      // forever — that's what used to surface as a permanent 404 error.
+      localStorage.removeItem(DRIVE_FILEID_KEY);
+      const found = await driveFind();
+      return driveUpload(found, data, true);
+    }
+    throw new Error("Drive request failed (HTTP " + r.status + ")");
   }
-  // First-ever save: no file to PATCH yet, so create it — multipart carries
-  // both the Drive metadata (the name) and the JSON content in one request.
+  // First-ever save, or the cached id was stale and no file was found on
+  // retry: no file to PATCH, so create one — multipart carries both the
+  // Drive metadata (the name) and the JSON content in one request.
   const boundary = "sleeptrackerboundary";
   const metadata = JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: "application/json" });
   const multipart =
