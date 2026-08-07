@@ -85,6 +85,7 @@ body {
 header.top { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 header.top h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 header.top .spacer { flex: 1; }
+header.top .section-nav { display: flex; gap: 8px; align-items: center; }
 
 .card {
   background: var(--surface-1);
@@ -227,8 +228,17 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 
 /* ── exercise ────────────────────────────────────────────────────────────── */
 .lift-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.lift-toggle button { border: 0; border-radius: 0; padding: 8px 14px; }
+.lift-toggle button {
+  border: 0; border-radius: 0; padding: 12px 20px; min-height: 44px;
+  font-weight: 600; color: var(--text-secondary); background: var(--surface-1);
+}
 .lift-toggle button + button { border-left: 1px solid var(--border); }
+.lift-toggle button:hover { background: var(--hover-wash); }
+.lift-toggle button[aria-pressed="true"] {
+  background: var(--series-bed); color: #fff;
+}
+.lift-toggle button[aria-pressed="true"]:hover { filter: brightness(1.08); }
+.lift-toggle button[aria-pressed="true"]::before { content: "✓ "; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
@@ -270,7 +280,10 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
   .tile .value { font-size: 22px; }
   .weight-group { width: 100%; }
   .wstep { min-width: 38px; padding: 0 6px; }
-  header.top { flex-wrap: wrap; row-gap: 8px; }
+  header.top { flex-wrap: wrap; row-gap: 10px; }
+  header.top .spacer { flex-basis: 0; }
+  header.top #themeBtn { order: 3; }
+  header.top .section-nav { order: 4; flex-basis: 100%; }
 }
 </style>
 </head>
@@ -280,9 +293,11 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 <header class="top">
   <h1>Health Tracker</h1>
   <div class="spacer"></div>
-  <button class="subtle" onclick="document.getElementById('weightCard').scrollIntoView({behavior:'smooth'})">Weight</button>
-  <button class="subtle" onclick="document.getElementById('exerciseCard').scrollIntoView({behavior:'smooth'})">Exercise</button>
-  <button class="subtle" onclick="document.getElementById('sleepCard').scrollIntoView({behavior:'smooth'})">Sleep</button>
+  <nav class="section-nav">
+    <button class="subtle" onclick="document.getElementById('weightCard').scrollIntoView({behavior:'smooth'})">Weight</button>
+    <button class="subtle" onclick="document.getElementById('exerciseCard').scrollIntoView({behavior:'smooth'})">Exercise</button>
+    <button class="subtle" onclick="document.getElementById('sleepCard').scrollIntoView({behavior:'smooth'})">Sleep</button>
+  </nav>
   <button id="themeBtn" class="subtle" title="Toggle light / dark">Theme</button>
 </header>
 
