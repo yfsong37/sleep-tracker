@@ -85,7 +85,24 @@ body {
 header.top { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 header.top h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 header.top .spacer { flex: 1; }
-header.top .section-nav { display: flex; gap: 8px; align-items: center; }
+
+/* ── tabs ────────────────────────────────────────────────────────────────── */
+.tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tabs button { border: 0; border-radius: 0; padding: 7px 16px; font-size: 14px; color: var(--text-secondary); }
+.tabs button + button { border-left: 1px solid var(--border); }
+.tabs button[aria-selected="true"] { background: var(--accent-wash); color: var(--text-primary); font-weight: 600; }
+
+.cardhead { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 12px; row-gap: 2px; margin-bottom: 10px; }
+.cardhead h2 { margin: 0; }
+.stat { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.stat .up { color: var(--good); }
+.stat .down { color: var(--critical); }
+
+details.manual { margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+details.manual summary { cursor: pointer; width: fit-content; }
+.deep-input { width: 110px; font-size: 20px !important; font-weight: 600; text-align: center; padding: 9px 6px !important; font-variant-numeric: tabular-nums; }
+.weight-field { flex: 1 1 300px; }
+#weightVal.suggested { color: var(--text-muted); }
 
 .card {
   background: var(--surface-1);
@@ -133,8 +150,6 @@ label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; 
 label.inline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
 
 /* ── log zone ────────────────────────────────────────────────────────────── */
-.logzone { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
-.logzone > .col { flex: 1 1 260px; min-width: 0; }
 .bigbtn {
   width: 100%; padding: 20px 16px; font-size: 17px; font-weight: 600;
   border-radius: 12px; line-height: 1.3;
@@ -145,22 +160,10 @@ label.inline { display: flex; align-items: center; gap: 8px; font-size: 13px; co
 .status.err { color: var(--critical); }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
 
-/* ── stat tiles ──────────────────────────────────────────────────────────── */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 20px 0; }
-.tile {
-  background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
-}
-.tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
-.tile .value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
-.tile .delta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
-.tile .delta .up { color: var(--good); }
-.tile .delta .down { color: var(--critical); }
-
 /* ── filter row ──────────────────────────────────────────────────────────── */
 .filters {
   display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-  margin: 24px 0 16px;
+  margin: 0 0 16px;
 }
 .filters .spacer { flex: 1; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -276,14 +279,19 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 @media (max-width: 560px) {
-  .wrap { padding: 16px 14px 48px; }
-  .tile .value { font-size: 22px; }
+  .wrap { padding: 16px 16px calc(80px + env(safe-area-inset-bottom)); }
   .weight-group { width: 100%; }
   .wstep { min-width: 38px; padding: 0 6px; }
-  header.top { flex-wrap: wrap; row-gap: 10px; }
-  header.top .spacer { flex-basis: 0; }
-  header.top #themeBtn { order: 3; }
-  header.top .section-nav { order: 4; flex-basis: 100%; }
+  header.top { margin-bottom: 16px; }
+  /* bottom tab bar, thumb-reachable */
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; border: 0; border-top: 1px solid var(--border); border-radius: 0;
+    background: var(--surface-1); padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
+  }
+  .tabs button { flex: 1; padding: 14px 0; font-size: 15px; }
+  .tabs button + button { border-left: 0; }
 }
 </style>
 </head>
@@ -293,24 +301,32 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
 <header class="top">
   <h1>Health Tracker</h1>
   <div class="spacer"></div>
-  <nav class="section-nav">
-    <button class="subtle" onclick="document.getElementById('weightCard').scrollIntoView({behavior:'smooth'})">Weight</button>
-    <button class="subtle" onclick="document.getElementById('exerciseCard').scrollIntoView({behavior:'smooth'})">Exercise</button>
-    <button class="subtle" onclick="document.getElementById('sleepCard').scrollIntoView({behavior:'smooth'})">Sleep</button>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-tab="log" aria-selected="true">Log</button>
+    <button role="tab" data-tab="charts" aria-selected="false">Charts</button>
+    <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
   </nav>
   <button id="themeBtn" class="subtle" title="Toggle light / dark">Theme</button>
 </header>
 
-<!-- ── weight logging ──────────────────────────────────────────────────── -->
-<section class="card" id="weightCard">
-  <h2>Weight</h2>
-  <p class="sub">Pre-filled with your most recent entry — scroll, drag, or type to adjust.</p>
+<!-- ════ LOG TAB ════════════════════════════════════════════════════════ -->
+<div class="tabpanel" id="tab-log" role="tabpanel">
+
+<!-- ── morning: deep sleep + weight ─────────────────────────────────────── -->
+<section class="card" id="morningCard">
+  <h2>Morning</h2>
+  <p class="sub">Last night's deep sleep and this morning's weight, saved together.</p>
   <div class="row" style="align-items:flex-start">
     <label class="field">
-      <span>Date</span>
-      <input type="date" id="weightDate">
+      <span>Morning of</span>
+      <input type="date" id="morningDate">
     </label>
     <label class="field">
+      <span>Deep sleep (min)</span>
+      <input type="number" id="deepMins" min="0" max="600" step="1" inputmode="numeric" class="deep-input">
+      <span class="wfield-hint" id="deepNightHint" style="text-align:left"></span>
+    </label>
+    <label class="field weight-field">
       <span>Weight</span>
       <div class="weight-group">
         <button class="wstep" id="wMinus1" data-step="-1" title="−1 kg">−1</button>
@@ -322,11 +338,13 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
         <button class="wstep" id="wPlus01" data-step="0.1" title="+0.1 kg">+.1</button>
         <button class="wstep" id="wPlus1" data-step="1" title="+1 kg">+1</button>
       </div>
-      <span class="wfield-hint">scroll wheel or drag up/down on the number to nudge it</span>
+      <span class="wfield-hint" id="weightHint">grey = last entry; scroll, drag, or type to set today's</span>
     </label>
-    <button id="weightSave" class="primary">Save</button>
   </div>
-  <div class="status" id="weightStatus" role="status" aria-live="polite"></div>
+  <div class="row" style="margin-top:14px">
+    <button id="morningSave" class="primary">Save</button>
+  </div>
+  <div class="status" id="morningStatus" role="status" aria-live="polite"></div>
 </section>
 
 <!-- ── exercise logging ────────────────────────────────────────────────── -->
@@ -370,99 +388,39 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
   <div class="status" id="exerciseStatus" role="status" aria-live="polite"></div>
 </section>
 
-<!-- ── sleep logging ───────────────────────────────────────────────────── -->
+<!-- ── tonight: bedtime ─────────────────────────────────────────────────── -->
 <section class="card" id="sleepCard">
-  <div class="logzone">
-    <div class="col">
-      <h2>Bedtime</h2>
-      <p class="sub">One click stamps the current time as tonight's bedtime.</p>
-      <button id="logBtn" class="primary bigbtn">
-        Log bedtime now
-        <span class="hint" id="logHint">—</span>
-      </button>
-      <div class="row" style="margin-top:10px">
-        <label class="field">
-          <span>Or set manually</span>
-          <div class="row">
-            <input type="date" id="bedDate">
-            <input type="time" id="bedTime">
-            <button id="bedSave">Save</button>
-          </div>
-        </label>
-      </div>
-      <div class="status" id="bedStatus" role="status" aria-live="polite"></div>
-    </div>
-
-    <div class="col">
-      <h2>Deep sleep</h2>
-      <p class="sub">Import from Apple Watch, or type it in.</p>
-      <div class="row">
-        <label class="field">
-          <span>Night of</span>
-          <input type="date" id="deepDate">
-        </label>
-        <label class="field">
-          <span>Deep sleep (minutes)</span>
-          <input type="number" id="deepMins" min="0" max="600" step="1" style="width:120px">
-        </label>
-        <button id="deepSave">Save</button>
-      </div>
-      <div class="status" id="deepStatus" role="status" aria-live="polite"></div>
-
-      <div class="filedrop" id="drop" style="margin-top:14px">
-        <strong>Import Apple Watch data</strong><br>
-        Drop your Health <code>export.xml</code> or a CSV here, or
-        <button id="pickBtn" class="mini" style="padding:3px 9px;font-size:12px">choose a file</button>
-        <input type="file" id="file" accept=".xml,.csv,.txt" class="hidden">
-      </div>
-      <label class="inline" style="margin-top:10px">
-        <input type="checkbox" id="fillBed" checked>
-        Also backfill missing bedtimes from the import
+  <h2>Tonight</h2>
+  <p class="sub">One tap stamps the current time as tonight's bedtime.</p>
+  <button id="logBtn" class="primary bigbtn">
+    Log bedtime now
+    <span class="hint" id="logHint">—</span>
+  </button>
+  <details class="manual">
+    <summary>Set a bedtime manually</summary>
+    <div class="row" style="margin-top:10px">
+      <label class="field">
+        <span>Night of</span>
+        <input type="date" id="bedDate">
       </label>
-      <div class="progress hidden" id="prog"><i></i></div>
-      <div class="status" id="impStatus" role="status" aria-live="polite"></div>
-      <p class="note">
-        Health app → profile → <em>Export All Health Data</em> → unzip → pick
-        <code>apple_health_export/export.xml</code>. Parsed on your device; nothing is uploaded.
-      </p>
+      <label class="field">
+        <span>Bedtime</span>
+        <input type="time" id="bedTime">
+      </label>
+      <button id="bedSave">Save</button>
     </div>
-  </div>
+  </details>
+  <div class="status" id="bedStatus" role="status" aria-live="polite"></div>
 </section>
 
-<!-- ── goals ───────────────────────────────────────────────────────────── -->
-<section class="card">
-  <h2>Goals &amp; settings</h2>
-  <p class="sub">Sleep targets appear as reference lines on the charts below. Lift day names are yours to define.</p>
-  <div class="row">
-    <label class="field">
-      <span>Target bedtime</span>
-      <input type="time" id="targetBed">
-    </label>
-    <label class="field">
-      <span>Minimum deep sleep (minutes)</span>
-      <input type="number" id="targetDeep" min="0" max="600" step="5" style="width:130px">
-    </label>
-    <span class="note" id="targetDeepHint" style="margin:0 0 8px 4px"></span>
-  </div>
-  <div class="row" style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border)">
-    <label class="field">
-      <span>Lift day A name</span>
-      <input type="text" id="liftLabelA" style="width:140px">
-    </label>
-    <label class="field">
-      <span>Lift day B name</span>
-      <input type="text" id="liftLabelB" style="width:140px">
-    </label>
-  </div>
-</section>
+</div><!-- /tab-log -->
 
-<!-- ── stats ───────────────────────────────────────────────────────────── -->
-<div class="kpis" id="kpis"></div>
+<!-- ════ CHARTS TAB ═════════════════════════════════════════════════════ -->
+<div class="tabpanel hidden" id="tab-charts" role="tabpanel">
 
-<!-- ── filters ─────────────────────────────────────────────────────────── -->
 <div class="filters">
   <div class="seg" id="rangeSeg" role="group" aria-label="Time range">
-    <button data-days="7">7 nights</button>
+    <button data-days="7">7 days</button>
     <button data-days="14">14</button>
     <button data-days="30">30</button>
     <button data-days="90">90</button>
@@ -475,38 +433,32 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
   </div>
 </div>
 
-<!-- ── charts ──────────────────────────────────────────────────────────── -->
 <div id="chartsView">
   <section class="card">
-    <h2>Weight</h2>
-    <p class="sub">Body weight per day, in kg.</p>
+    <div class="cardhead"><h2>Weight</h2><span class="stat" id="weightStat"></span></div>
     <div class="legend" id="weightLegend"></div>
     <div class="chartbox" id="weightChart"></div>
   </section>
 
   <section class="card">
-    <h2>Activity</h2>
-    <p class="sub">Aligned to the same dates as the weight chart above, to eyeball what coincides with what.</p>
+    <div class="cardhead"><h2>Activity</h2><span class="stat" id="activityStat"></span></div>
     <div class="strip-legend" id="stripLegend"></div>
     <div class="stripbox" id="activityStrip"></div>
   </section>
 
   <section class="card">
-    <h2>Bedtime</h2>
-    <p class="sub" id="bedSubtitle">When you went to bed each night — higher is later.</p>
+    <div class="cardhead"><h2>Bedtime</h2><span class="stat" id="bedStat"></span></div>
     <div class="legend" id="bedLegend"></div>
     <div class="chartbox" id="bedChart"></div>
   </section>
 
   <section class="card">
-    <h2>Deep sleep</h2>
-    <p class="sub">Minutes of deep sleep per night.</p>
+    <div class="cardhead"><h2>Deep sleep</h2><span class="stat" id="deepStat"></span></div>
     <div class="legend" id="deepLegend"></div>
     <div class="chartbox" id="deepChart"></div>
   </section>
 </div>
 
-<!-- ── table ───────────────────────────────────────────────────────────── -->
 <section class="card hidden" id="tableView">
   <h2>All days</h2>
   <p class="sub">The same data as the charts. Edit or delete any day.</p>
@@ -530,6 +482,59 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
       <tbody id="tbody"></tbody>
     </table>
   </div>
+</section>
+
+</div><!-- /tab-charts -->
+
+<!-- ════ SETTINGS TAB ═══════════════════════════════════════════════════ -->
+<div class="tabpanel hidden" id="tab-settings" role="tabpanel">
+
+<!-- ── goals ───────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>Goals &amp; settings</h2>
+  <p class="sub">Sleep targets appear as reference lines on the charts. Lift day names are yours to define.</p>
+  <div class="row">
+    <label class="field">
+      <span>Target bedtime</span>
+      <input type="time" id="targetBed">
+    </label>
+    <label class="field">
+      <span>Minimum deep sleep (minutes)</span>
+      <input type="number" id="targetDeep" min="0" max="600" step="5" style="width:130px">
+    </label>
+    <span class="note" id="targetDeepHint" style="margin:0 0 8px 4px"></span>
+  </div>
+  <div class="row" style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border)">
+    <label class="field">
+      <span>Lift day A name</span>
+      <input type="text" id="liftLabelA" style="width:140px">
+    </label>
+    <label class="field">
+      <span>Lift day B name</span>
+      <input type="text" id="liftLabelB" style="width:140px">
+    </label>
+  </div>
+</section>
+
+<!-- ── Apple Watch import ──────────────────────────────────────────────── -->
+<section class="card">
+  <h2>Import Apple Watch sleep</h2>
+  <p class="sub">Bulk-fill deep sleep (and optionally bedtimes) from Apple Health or a CSV.</p>
+  <div class="filedrop" id="drop">
+    Drop your Health <code>export.xml</code> or a CSV here, or
+    <button id="pickBtn" class="mini" style="padding:3px 9px;font-size:12px">choose a file</button>
+    <input type="file" id="file" accept=".xml,.csv,.txt" class="hidden">
+  </div>
+  <label class="inline" style="margin-top:10px">
+    <input type="checkbox" id="fillBed" checked>
+    Also backfill missing bedtimes from the import
+  </label>
+  <div class="progress hidden" id="prog"><i></i></div>
+  <div class="status" id="impStatus" role="status" aria-live="polite"></div>
+  <p class="note">
+    Health app → profile → <em>Export All Health Data</em> → unzip → pick
+    <code>apple_health_export/export.xml</code>. Parsed on your device; nothing is uploaded.
+  </p>
 </section>
 
 <!-- ── data ────────────────────────────────────────────────────────────── -->
@@ -562,6 +567,8 @@ td input { padding: 3px 6px; font-size: 13px; width: 88px; }
     in Google Cloud Console — see the README.
   </p>
 </section>
+
+</div><!-- /tab-settings -->
 
 </div>
 
@@ -848,7 +855,7 @@ function renderWeight() {
 
   if (!pts.length) {
     legend.innerHTML = "";
-    emptyState(box, "No weight logged yet — enter today's weight above.");
+    emptyState(box, "No weight logged yet — enter today's weight on the Log tab.");
     return;
   }
 
@@ -999,7 +1006,7 @@ function renderActivityStrip() {
     `<span class="item"><span class="swatch" style="background:var(--series-weight);opacity:.95"></span>Other activity</span>`;
 
   if (!any) {
-    emptyState(box, "No exercise logged yet — log a lift day, cardio, or another activity above.");
+    emptyState(box, "No exercise logged yet — log a lift day, cardio, or another activity on the Log tab.");
     return;
   }
 
@@ -1269,7 +1276,7 @@ function renderDeep() {
 
   if (!pts.length) {
     legend.innerHTML = "";
-    emptyState(box, "No deep sleep recorded yet — import from Health or enter it above.");
+    emptyState(box, "No deep sleep recorded yet — enter it on the Log tab, or import from Health in Settings.");
     return;
   }
 
@@ -1400,8 +1407,8 @@ function renderDeep() {
   });
 }
 
-/* ══ stat tiles ═══════════════════════════════════════════════════════════ */
-function renderKpis() {
+/* ══ chart-header stats ═══════════════════════════════════════════════════ */
+function renderStats() {
   const rows = seriesForRange();
   const beds = rows.filter((r) => r.bedAxis != null);
   const deeps = rows.filter((r) => r.deep != null);
@@ -1424,65 +1431,42 @@ function renderKpis() {
     streak++;
   }
 
-  const label = rangeDays > 0 ? `last ${rangeDays} nights` : "all time";
-  const tiles = [
-    { label: `Average bedtime · ${label}`, value: avgBed == null ? "—" : axisLabel(avgBed),
-      delta: avgBed == null ? "" : deltaVsTarget(avgBed, targetAxis) },
-    { label: `Nights on target · ${label}`, value: beds.length ? `${onTarget} of ${beds.length}` : "—",
-      delta: beds.length ? `${Math.round((onTarget / beds.length) * 100)}% at or before ${state.settings.targetBedtime}` : "" },
-    { label: `Average deep sleep · ${label}`, value: avgDeep == null ? "—" : fmtDuration(Math.round(avgDeep)),
-      delta: avgDeep == null ? "" : (avgDeep >= minDeep
-        ? `<span class="up">▲ ${fmtDuration(Math.round(avgDeep - minDeep))} over minimum</span>`
-        : `<span class="down">▼ ${fmtDuration(Math.round(minDeep - avgDeep))} under minimum</span>`) +
-        ` · ${metDeep} of ${deeps.length} nights met it` },
-    { label: "Current streak", value: streak ? `${streak} night${streak === 1 ? "" : "s"}` : "—",
-      delta: streak ? "consecutive nights meeting both goals" : "meet both goals tonight to start one" },
-  ];
+  const join = (parts) => parts.filter(Boolean).join(" · ");
 
-  document.getElementById("kpis").innerHTML = tiles.map((t) =>
-    `<div class="tile"><div class="label">${t.label}</div>` +
-    `<div class="value">${t.value}</div>` +
-    (t.delta ? `<div class="delta">${t.delta}</div>` : "") + `</div>`
-  ).join("");
+  document.getElementById("bedStat").innerHTML = !beds.length ? "" : join([
+    `avg ${axisLabel(avgBed)}`,
+    `<span class="${onTarget * 2 >= beds.length ? "up" : "down"}">${onTarget}/${beds.length} on target</span>`,
+    streak ? `${streak}-night streak` : null,
+  ]);
 
-  renderWeightExerciseKpis(rows, label);
-}
+  document.getElementById("deepStat").innerHTML = !deeps.length ? "" : join([
+    `avg ${fmtDuration(Math.round(avgDeep))}`,
+    `<span class="${metDeep * 2 >= deeps.length ? "up" : "down"}">${metDeep}/${deeps.length} met min</span>`,
+  ]);
 
-function renderWeightExerciseKpis(rows, label) {
   const weights = rows.filter((r) => r.weight != null);
-  const curWeight = weights.length ? weights[weights.length - 1].weight : null;
-  const firstWeight = weights.length ? weights[0].weight : null;
-  const weightDelta = curWeight != null && firstWeight != null ? curWeight - firstWeight : null;
+  let weightHtml = "";
+  if (weights.length) {
+    const cur = weights[weights.length - 1].weight;
+    const delta = cur - weights[0].weight;
+    const span = rangeDays > 0 ? `${rangeDays}d` : "all time";
+    weightHtml = join([
+      `${cur.toFixed(2)} kg`,
+      weights.length < 2 || Math.abs(delta) < 0.005 ? null
+        : delta < 0 ? `<span class="up">▼ ${Math.abs(delta).toFixed(2)} / ${span}</span>`
+                    : `<span class="down">▲ ${delta.toFixed(2)} / ${span}</span>`,
+    ]);
+  }
+  document.getElementById("weightStat").innerHTML = weightHtml;
 
   const liftDays = rows.filter((r) => r.lift).length;
   const cardioTotal = rows.reduce((a, r) => a + (r.cardio || 0), 0);
   const otherTotal = rows.reduce((a, r) => a + (r.otherMins || 0), 0);
-
-  const tiles = [
-    { label: "Current weight", value: curWeight == null ? "—" : `${curWeight.toFixed(2)} kg`,
-      delta: weightDelta == null ? "" : weightDelta === 0 ? `unchanged over ${label}` :
-        (weightDelta < 0
-          ? `<span class="up">▼ ${Math.abs(weightDelta).toFixed(2)} kg</span>`
-          : `<span class="down">▲ ${weightDelta.toFixed(2)} kg</span>`) + ` over ${label}` },
-    { label: `Lift days · ${label}`, value: liftDays ? String(liftDays) : "—",
-      delta: liftDays ? `of ${rows.length} days in range` : "" },
-    { label: `Cardio · ${label}`, value: cardioTotal ? fmtDuration(cardioTotal) : "—", delta: "" },
-    { label: `Other activity · ${label}`, value: otherTotal ? fmtDuration(otherTotal) : "—", delta: "" },
-  ];
-
-  document.getElementById("kpis").insertAdjacentHTML("beforeend", tiles.map((t) =>
-    `<div class="tile"><div class="label">${t.label}</div>` +
-    `<div class="value">${t.value}</div>` +
-    (t.delta ? `<div class="delta">${t.delta}</div>` : "") + `</div>`
-  ).join(""));
-}
-
-function deltaVsTarget(avgAxis, targetAxis) {
-  const diff = Math.round(avgAxis - targetAxis);
-  if (diff === 0) return "exactly on target";
-  return diff < 0
-    ? `<span class="up">▲ ${fmtDuration(-diff)} before target</span>`
-    : `<span class="down">▼ ${fmtDuration(diff)} after target</span>`;
+  document.getElementById("activityStat").innerHTML = join([
+    liftDays ? `${liftDays} lift day${liftDays === 1 ? "" : "s"}` : null,
+    cardioTotal ? `cardio ${fmtDuration(cardioTotal)}` : null,
+    otherTotal ? `other ${fmtDuration(otherTotal)}` : null,
+  ]);
 }
 
 /* ══ table view ═══════════════════════════════════════════════════════════ */
@@ -1598,11 +1582,34 @@ document.getElementById("tbody").addEventListener("click", (e) => {
 /* ══ render orchestration ═════════════════════════════════════════════════ */
 function renderAll() {
   TOK = null;
-  renderKpis();
+  refreshLogHint();
+  // Charts size themselves from their container, which is 0px wide while the
+  // tab is hidden — so only draw them when visible; switching tabs redraws.
+  if (activeTab !== "charts") return;
+  renderStats();
   if (showTable) renderTable();
   else { renderWeight(); renderActivityStrip(); renderBedtime(); renderDeep(); }
-  refreshLogHint();
 }
+
+/* ══ tabs ═════════════════════════════════════════════════════════════════ */
+const TABS = ["log", "charts", "settings"];
+let activeTab = "log";
+
+function showTab(name) {
+  if (!TABS.includes(name)) name = "log";
+  activeTab = name;
+  for (const t of TABS) document.getElementById("tab-" + t).classList.toggle("hidden", t !== name);
+  document.querySelectorAll("#tabs button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+  window.scrollTo(0, 0);
+  renderAll();
+}
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-tab]");
+  if (b) showTab(b.dataset.tab);
+});
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 
 function refreshLogHint() {
   const tonight = nightOf(new Date());
@@ -1647,38 +1654,88 @@ document.getElementById("bedSave").addEventListener("click", () => {
   setStatus("bedStatus", `Saved ${axisLabel(toAxis(hmToMin(time)))} for the night of ${fmtDate(date, true)}.`, "ok");
 });
 
-document.getElementById("deepSave").addEventListener("click", () => {
-  const date = document.getElementById("deepDate").value;
-  const raw = document.getElementById("deepMins").value;
-  if (!date) { setStatus("deepStatus", "Pick the night this belongs to.", "err"); return; }
-  const v = Number(raw);
-  if (raw === "" || !Number.isFinite(v) || v < 0) { setStatus("deepStatus", "Enter deep sleep in minutes.", "err"); return; }
-  const rec = state.nights[date] || {};
-  rec.deepMinutes = Math.round(v);
-  rec.source = rec.source || "manual";
-  state.nights[date] = rec;
-  save();
-  renderAll();
-  setStatus("deepStatus", `Saved ${fmtDuration(Math.round(v))} for the night of ${fmtDate(date, true)}.`, "ok");
-});
-
-/* ── weight actions ────────────────────────────────────────────────────── */
+/* ── morning: deep sleep (last night) + weight (today) ─────────────────── */
 function roundKg(v) { return Math.round(v * 100) / 100; }
 
-function fillWeightForDate(date) {
-  const rec = state.days[date];
-  const val = rec && typeof rec.weightKg === "number" ? rec.weightKg : lastWeightBefore(addDays(date, -1));
-  document.getElementById("weightVal").value = val == null ? "" : val.toFixed(2);
+/* The weight box is pre-filled with the last entry as a starting point. Until
+   it's touched (typed, stepped, scrolled, dragged) it's only a suggestion:
+   shown grey, and not saved — so saving just deep sleep never quietly copies
+   yesterday's weight onto today. A date that already has a weight counts as
+   set. */
+let weightTouched = false;
+function setWeightTouched(v) {
+  weightTouched = v;
+  document.getElementById("weightVal").classList.toggle("suggested", !v);
 }
 
-document.getElementById("weightDate").addEventListener("change", (e) => fillWeightForDate(e.target.value));
+/** Deep sleep reported in the morning belongs to the night before. */
+const nightBefore = (morning) => addDays(morning, -1);
+
+function fillMorningForDate(date) {
+  const night = nightBefore(date);
+  const n = state.nights[night];
+  document.getElementById("deepMins").value = n && typeof n.deepMinutes === "number" ? n.deepMinutes : "";
+  document.getElementById("deepNightHint").textContent = `night of ${fmtDate(night)}`;
+
+  const rec = state.days[date];
+  const has = rec && typeof rec.weightKg === "number";
+  const val = has ? rec.weightKg : lastWeightBefore(addDays(date, -1));
+  document.getElementById("weightVal").value = val == null ? "" : val.toFixed(2);
+  setWeightTouched(has);
+}
+
+document.getElementById("morningDate").addEventListener("change", (e) => {
+  if (e.target.value) fillMorningForDate(e.target.value);
+});
+
+document.getElementById("weightVal").addEventListener("input", () => setWeightTouched(true));
 
 document.querySelectorAll(".wstep").forEach((btn) => {
   btn.addEventListener("click", () => {
     const input = document.getElementById("weightVal");
     const cur = Number(input.value) || 0;
     input.value = roundKg(cur + Number(btn.dataset.step)).toFixed(2);
+    setWeightTouched(true);
   });
+});
+
+document.getElementById("morningSave").addEventListener("click", () => {
+  const date = document.getElementById("morningDate").value;
+  if (!date) { setStatus("morningStatus", "Pick the morning this belongs to.", "err"); return; }
+  const deepRaw = document.getElementById("deepMins").value;
+  const weightRaw = document.getElementById("weightVal").value;
+  const deep = deepRaw === "" ? null : Number(deepRaw);
+  const weight = weightTouched && weightRaw !== "" ? Number(weightRaw) : null;
+
+  if (deep != null && (!Number.isFinite(deep) || deep < 0)) {
+    setStatus("morningStatus", "Deep sleep should be minutes, e.g. 85.", "err"); return;
+  }
+  if (weight != null && (!Number.isFinite(weight) || weight <= 0)) {
+    setStatus("morningStatus", "Enter a weight in kg.", "err"); return;
+  }
+  if (deep == null && weight == null) {
+    setStatus("morningStatus", "Enter deep sleep minutes, or adjust the weight, then save.", "err"); return;
+  }
+
+  const saved = [];
+  if (deep != null) {
+    const night = nightBefore(date);
+    const rec = state.nights[night] || {};
+    rec.deepMinutes = Math.round(deep);
+    rec.source = rec.source || "manual";
+    state.nights[night] = rec;
+    saved.push(`${fmtDuration(Math.round(deep))} deep sleep (night of ${fmtDate(night)})`);
+  }
+  if (weight != null) {
+    const rec = state.days[date] || {};
+    rec.weightKg = roundKg(weight);
+    state.days[date] = rec;
+    saved.push(`${roundKg(weight).toFixed(2)} kg (${fmtDate(date)})`);
+  }
+  save();
+  renderAll();
+  setStatus("morningStatus", "Saved " + saved.join(" and ") +
+    (weight == null ? ". Weight not saved — still the grey suggestion." : "."), "ok");
 });
 
 /* Wheel: one notch = 0.05kg, hold Shift for 0.5kg. */
@@ -1688,6 +1745,7 @@ document.getElementById("weightVal").addEventListener("wheel", (e) => {
   const cur = Number(input.value) || 0;
   const step = e.shiftKey ? 0.5 : 0.05;
   input.value = roundKg(cur + (e.deltaY < 0 ? step : -step)).toFixed(2);
+  setWeightTouched(true);
 }, { passive: false });
 
 /* Vertical drag: also nudges the value, for touch devices with no wheel.
@@ -1711,26 +1769,13 @@ document.getElementById("weightVal").addEventListener("wheel", (e) => {
     input.blur();
     e.preventDefault();
     input.value = roundKg(startVal + Math.round(dy / 8) * 0.05).toFixed(2);
+    setWeightTouched(true);
   });
   const end = () => { dragging = false; };
   input.addEventListener("pointerup", end);
   input.addEventListener("pointercancel", end);
   input.addEventListener("click", (e) => { if (moved) e.preventDefault(); });
 })();
-
-document.getElementById("weightSave").addEventListener("click", () => {
-  const date = document.getElementById("weightDate").value;
-  const raw = document.getElementById("weightVal").value;
-  if (!date) { setStatus("weightStatus", "Pick the date this belongs to.", "err"); return; }
-  const v = Number(raw);
-  if (raw === "" || !Number.isFinite(v) || v <= 0) { setStatus("weightStatus", "Enter a weight in kg.", "err"); return; }
-  const rec = state.days[date] || {};
-  rec.weightKg = roundKg(v);
-  state.days[date] = rec;
-  save();
-  renderAll();
-  setStatus("weightStatus", `Saved ${roundKg(v).toFixed(2)} kg for ${fmtDate(date, true)}.`, "ok");
-});
 
 /* ── exercise actions ─────────────────────────────────────────────────── */
 let pendingActivities = [];
@@ -2333,7 +2378,6 @@ function syncInputs() {
   document.getElementById("targetDeep").value = state.settings.minDeepMinutes;
   const tonight = nightOf(new Date());
   document.getElementById("bedDate").value = tonight;
-  document.getElementById("deepDate").value = tonight;
   const rec = state.nights[tonight];
   document.getElementById("bedTime").value = (rec && rec.bedtime) || state.settings.targetBedtime;
   syncGoalHint();
@@ -2343,8 +2387,8 @@ function syncInputs() {
   syncLiftLabelButtons();
 
   const today = ymd(new Date());
-  document.getElementById("weightDate").value = today;
-  fillWeightForDate(today);
+  document.getElementById("morningDate").value = today;
+  fillMorningForDate(today);
   document.getElementById("exerciseDate").value = today;
   fillExerciseForDate(today);
 }
@@ -2353,7 +2397,7 @@ applyTheme(localStorage.getItem(THEME_KEY) || "");
 syncInputs();
 [...document.getElementById("rangeSeg").children].forEach((b) =>
   b.setAttribute("aria-pressed", String(Number(b.dataset.days) === rangeDays)));
-renderAll();
+showTab(location.hash.slice(1) || "log");
 
 let rt;
 window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderAll, 120); });
